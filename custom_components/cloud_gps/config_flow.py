@@ -397,8 +397,8 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         device_name = "平台名称GPS"
         data_schema = OrderedDict()
         data_schema[vol.Required(CONF_NAME, default=device_name)] = str
-        data_schema[vol.Required(CONF_USERNAME ,default ="taste")] = str
-        data_schema[vol.Required(CONF_PASSWORD ,default ="888888")] = str
+        data_schema[vol.Required(CONF_USERNAME ,default ="")] = str
+        data_schema[vol.Required(CONF_PASSWORD ,default ="")] = str
         data_schema[vol.Required(CONF_WEB_HOST, default="")] = vol.All(str, vol.In(WEBHOST))
 
         return self.async_show_form(
