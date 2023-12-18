@@ -102,7 +102,8 @@ class DataFetcher:
             "token": self.cloudpgs_token
         }
         resp = self.session_tuqiangnet.post(url, data=p_data)
-        return round(float(resp.json()['data']['totalMileage'])/1000, 2)
+        return round(float(resp.json()['data']['totalMileage'])/1000, 2) if isinstance(resp.json()['data'].get('totalMileage'),float) else 0
+
             
     def _get_device_address(self, lat, lng):
         url = TUQIANGNET_API_HOST + '/comm/getGpsAddr'
@@ -128,20 +129,13 @@ class DataFetcher:
             else:
                 return("{0}秒".format(seconds))
         
-    async def get_data(self):  
-        # tasks = [            
-            # asyncio.create_task(self._get_ikuai_status(sess_key)),
-        # ]
-        # await asyncio.gather(*tasks)
-        
-        # _LOGGER.debug(self._data)
-        # return self._data
-        
+    async def get_data(self):
+    
         if self.cloudpgs_token is None:
             await self.hass.async_add_executor_job(self._login, self.username, self.password)        
         _LOGGER.debug(self.device_imei)
         for imei in self.device_imei:
-            _LOGGER.debug("Requests webhost: %s, imei: %s", imei)
+            _LOGGER.debug("Requests imei: %s", imei)
             self.trackerdata[imei] = {}
             if not self.deviceinfo.get(imei):
                 self.deviceinfo[imei] = {}
@@ -231,7 +225,7 @@ class DataFetcher:
                     "powerStatus":powerStatus,
                     "parkingtime":parkingtime,
                     "address":address,
-                    "voltage":voltage,
+                    "powbatteryvoltage":voltage,
                     "percentageElectricQuantity": percentageElectricQuantity,
                     "totalKm":totalKm,
                     "positionType":positionType
