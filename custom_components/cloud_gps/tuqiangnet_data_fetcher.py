@@ -102,7 +102,7 @@ class DataFetcher:
             "token": self.cloudpgs_token
         }
         resp = self.session_tuqiangnet.post(url, data=p_data)
-        return round(float(resp.json()['data']['totalMileage'])/1000, 2) if isinstance(resp.json()['data'].get('totalMileage'),float) else 0
+        return round(float(resp.json()['data']['totalMileage'])/1000, 2) if resp.json()['data'].get('totalMileage')!= None else 0
 
             
     def _get_device_address(self, lat, lng):
