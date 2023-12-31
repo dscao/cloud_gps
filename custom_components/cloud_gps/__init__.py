@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2023-12-2
+LastEditTime  : 2024-1-1
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -84,11 +84,12 @@ from .const import (
 
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2023.12.12'
+__version__ = '2024.1.1'
 
 _LOGGER = logging.getLogger(__name__)
     
-PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR] 
+PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
+   
    
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up configured cloud_gps."""
@@ -166,7 +167,7 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         update_interval = (
             datetime.timedelta(seconds=int(update_interval_seconds))
         )
-        _LOGGER.debug("$s Data %s will be update every %s", webhost, device_imei, update_interval)
+        _LOGGER.debug("Data %s , %s will be update every %s", webhost, device_imei, update_interval)
 
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
         
@@ -187,6 +188,10 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
             from .tuqiang123_data_fetcher import DataFetcher
         elif webhost == "tuqiang.net":
             from .tuqiangnet_data_fetcher import DataFetcher
+        elif webhost == "niu.com":
+            from .niu_data_fetcher import DataFetcher
+        elif webhost == "hellobike.com":
+            from .hellobike_data_fetcher import DataFetcher
         else:
             _LOGGER.error("配置的平台不支持，请删除集成条目重新配置！")
             return
@@ -210,7 +215,7 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
                 for imei in self.device_imei:        
                     self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
                 _LOGGER.debug("addressapi: %s", self._addressapi)
-                if self._addressapi != "none" and self._addressapi != None:                
+                if self._addressapi != "none" and self._addressapi != None:
                     for imei in self.device_imei:                        
                         if self._coords[imei] != self._coords_old.get(imei):
                             self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
@@ -327,11 +332,11 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         return response
 
     def generate_signature(self, params, private_key):
-        sorted_params = sorted(params.items(), key=lambda x: x[0])  # 按参数名的升序排序
-        param_str = '&'.join([f'{key}={value}' for key, value in sorted_params])  # 构建参数字符串
-        param_str += private_key  # 加私钥
-        signature = hashlib.md5(param_str.encode()).hexdigest()  # 计算MD5摘要
-        return signature  #根据私钥计算出web服务数字签名
+        sorted_params = sorted(params.items(), key=lambda x: x[0])
+        param_str = '&'.join([f'{key}={value}' for key, value in sorted_params])
+        param_str += private_key
+        signature = hashlib.md5(param_str.encode()).hexdigest() 
+        return signature
         
     def baidu_sn(self, params, private_key):
         param_str = urllib.parse.quote(params, safe="/:=&?#+!$,;'@()*[]")
