@@ -47,8 +47,8 @@ WEBHOST = {
     "tuqiang.net": "途强物联",
     "gooddriver.cn": "优驾盒子联网版",    
     "cmobd.com": "中移行车卫士（*用户密码填写token，暂未支持）",
-    "niu.com": "小牛电动车（暂未调试，不支持）",
-    "hellobike.com": "哈啰智能芯（*用户密码填写token，暂未支持）"
+    "niu.com": "小牛电动车（未调试，可能不支持）",
+    "hellobike.com": "哈啰智能芯（*用户密码填写token）"
 }
 
 API_HOST_TUQIANG123 = "http://www.tuqiang123.com"   # http://www.tuqiangol.com 或者 http://www.tuqiang123.com
