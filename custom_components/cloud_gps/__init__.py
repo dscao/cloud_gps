@@ -332,11 +332,11 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         return response
 
     def generate_signature(self, params, private_key):
-        sorted_params = sorted(params.items(), key=lambda x: x[0])
-        param_str = '&'.join([f'{key}={value}' for key, value in sorted_params])
-        param_str += private_key
-        signature = hashlib.md5(param_str.encode()).hexdigest() 
-        return signature
+        sorted_params = sorted(params.items(), key=lambda x: x[0])  # 按参数名的升序排序
+        param_str = '&'.join([f'{key}={value}' for key, value in sorted_params])  # 构建参数字符串
+        param_str += private_key  # 加私钥
+        signature = hashlib.md5(param_str.encode()).hexdigest()  # 计算MD5摘要
+        return signature  #根据私钥计算出web服务数字签名
         
     def baidu_sn(self, params, private_key):
         param_str = urllib.parse.quote(params, safe="/:=&?#+!$,;'@()*[]")

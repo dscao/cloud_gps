@@ -23,6 +23,10 @@ from .const import (
     KEY_LASTSTOPTIME,
     KEY_PARKING_TIME,
     KEY_SPEED,
+    KEY_TOTALKM,
+    KEY_STATUS,
+    KEY_ACC,
+    KEY_BATTERY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,7 +40,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key=KEY_PARKING_TIME,
         name="parkingtime",
-        icon="mdi:timer-stop-outline"
+        icon="mdi:parking"
     ),
     SensorEntityDescription(
         key=KEY_LASTSTOPTIME,
@@ -46,9 +50,30 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key=KEY_SPEED,
         name="speed",
-        icon="mdi:speedometer",
         unit_of_measurement = "km/h",
         device_class = "speed"
+    ),
+    SensorEntityDescription(
+        key=KEY_TOTALKM,
+        name="totalkm",
+        unit_of_measurement = "km",
+        device_class = "distance"
+    ),
+    SensorEntityDescription(
+        key=KEY_STATUS,
+        name="status",
+        icon="mdi:car-brake-alert"
+    ),
+    SensorEntityDescription(
+        key=KEY_ACC,
+        name="acc",
+        icon="mdi:engine"
+    ),
+    SensorEntityDescription(
+        key=KEY_BATTERY,
+        name="powbattery",
+        unit_of_measurement = "V",
+        icon="mdi:car-battery"
     )
 )
 
@@ -104,7 +129,19 @@ class CloudGPSSensorEntity(CoordinatorEntity):
             self._state = self.coordinator.data[self._imei]["attrs"].get("address")
             self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
         elif self.entity_description.key == "speed":         
-            self._state = float(self.coordinator.data[self._imei]["attrs"].get("speed"))
+            self._state = float(self.coordinator.data[self._imei]["attrs"].get("speed", 0))
+            self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+        elif self.entity_description.key == "totalkm":         
+            self._state = float(self.coordinator.data[self._imei]["attrs"].get("totalKm", 0))
+            self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+        elif self.entity_description.key == "acc":         
+            self._state = self.coordinator.data[self._imei]["attrs"].get("acc")
+            self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+        elif self.entity_description.key == "powbattery":         
+            self._state = float(self.coordinator.data[self._imei]["attrs"].get("powbatteryvoltage", 0))
+            self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+        elif self.entity_description.key == "status":       
+            self._state = self.coordinator.data[self._imei].get("status")
             self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
         
         _LOGGER.debug(self._state)
@@ -180,7 +217,19 @@ class CloudGPSSensorEntity(CoordinatorEntity):
                 self._state = self.coordinator.data[self._imei]["attrs"].get("address")
                 self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
             elif self.entity_description.key == "speed":         
-                self._state = self.coordinator.data[self._imei]["attrs"].get("speed")
+                self._state = float(self.coordinator.data[self._imei]["attrs"].get("speed", 0))
+                self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+            elif self.entity_description.key == "totalkm":         
+                self._state = float(self.coordinator.data[self._imei]["attrs"].get("totalKm", 0))
+                self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+            elif self.entity_description.key == "acc":         
+                self._state = self.coordinator.data[self._imei]["attrs"].get("acc")
+                self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+            elif self.entity_description.key == "powbattery":         
+                self._state = float(self.coordinator.data[self._imei]["attrs"].get("powbatteryvoltage", 0))
+                self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
+            elif self.entity_description.key == "status":       
+                self._state = self.coordinator.data[self._imei].get("status")
                 self._attrs = {"querytime": self.coordinator.data[self._imei]["attrs"].get("querytime")}
             
         

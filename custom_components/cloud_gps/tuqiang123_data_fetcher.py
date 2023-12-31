@@ -133,6 +133,7 @@ class DataFetcher:
                 return("{0}秒".format(seconds))
         
     async def get_data(self): 
+    
         _LOGGER.debug(self.device_imei)
         if self.userid is None or self.usertype is None:
             await self.hass.async_add_executor_job(self._login, self.username, self.password)
@@ -234,7 +235,7 @@ class DataFetcher:
                     "powerStatus":powerStatus,
                     "parkingtime":parkingtime,
                     "address":address,
-                    "voltage":voltage,
+                    "powbatteryvoltage":voltage,
                     "totalKm":totalKm,
                     "positionType":positionType
                 }

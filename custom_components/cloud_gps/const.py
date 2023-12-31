@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2023.12.2"
+VERSION = "2024.1.1"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
@@ -49,7 +49,7 @@ CONF_MAP_BD_LNG = "map_bd_lng"
 CONF_ADDRESSAPI = "addressapi"
 CONF_ADDRESSAPI_KEY = "api_key"
 CONF_PRIVATE_KEY = "private_key"
-CONF_WITH_BAIDUMAP_CARD = "with_baidumap_card"
+CONF_WITH_MAP_CARD = "with_map_card"
 
 COORDINATOR = "coordinator"
 UNDO_UPDATE_LISTENER = "undo_update_listener"
@@ -59,5 +59,9 @@ KEY_QUERYTIME = "querytime"
 KEY_PARKING_TIME = "parkingtime"
 KEY_LASTSTOPTIME = "laststoptime"
 KEY_SPEED = "speed"
+KEY_TOTALKM = "totalkm"
+KEY_STATUS = "status"
+KEY_ACC = "acc"
+KEY_BATTERY = "powbattery"
 
 

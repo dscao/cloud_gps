@@ -39,7 +39,7 @@ from .const import (
     CONF_MAP_GCJ_LNG,
     CONF_MAP_BD_LAT,
     CONF_MAP_BD_LNG, 
-    CONF_WITH_BAIDUMAP_CARD,
+    CONF_WITH_MAP_CARD,
 )
 
 PARALLEL_UPDATES = 1
@@ -49,13 +49,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Add cloud entities from a config_entry."""
     webhost = config_entry.data[CONF_WEB_HOST]
     attr_show = config_entry.options.get(CONF_ATTR_SHOW, True)
-    with_baidumap_card = config_entry.options.get(CONF_WITH_BAIDUMAP_CARD, False)
+    with_map_card = config_entry.options.get(CONF_WITH_MAP_CARD, "none")
     coordinator = hass.data[DOMAIN][config_entry.entry_id][COORDINATOR]
     
     for coordinatordata in coordinator.data:
         _LOGGER.debug("coordinatordata")
         _LOGGER.debug(coordinatordata)
-        async_add_entities([CloudGPSEntity(hass, webhost, coordinatordata, attr_show, with_baidumap_card, coordinator)], False)
+        async_add_entities([CloudGPSEntity(hass, webhost, coordinatordata, attr_show, with_map_card, coordinator)], False)
 
 
 class CloudGPSEntity(TrackerEntity):
@@ -63,13 +63,13 @@ class CloudGPSEntity(TrackerEntity):
     _attr_has_entity_name = True
     _attr_name = None
     _attr_translation_key = "cloud_device_tracker"
-    def __init__(self, hass, webhost, imei, attr_show, with_baidumap_card, coordinator):
+    def __init__(self, hass, webhost, imei, attr_show, with_map_card, coordinator):
         self._hass = hass
         self._imei = imei
         self._webhost = webhost
         self.coordinator = coordinator   
         self._attr_show = attr_show
-        self._with_baidumap_card = with_baidumap_card
+        self._with_map_card = with_map_card
         self._attrs = {}
         self._coords = [self.coordinator.data[self._imei]["thislon"], self.coordinator.data[self._imei]["thislat"]]
 
@@ -129,8 +129,8 @@ class CloudGPSEntity(TrackerEntity):
             attrs["status"] = self.coordinator.data[self._imei]["status"]
             if attrs.get("imei"):
                 attrs["imei"] = self.coordinator.data[self._imei]["imei"]
-            if self._with_baidumap_card == True:
-                attrs["custom_ui_more_info"] = "baidu-map"
+            if self._with_map_card != "none" and self._with_map_card != None:
+                attrs["custom_ui_more_info"] = self._with_map_card
             if self._attr_show == True:
                 attrslist = self.coordinator.data[self._imei]["attrs"]
                 for key, value in attrslist.items():

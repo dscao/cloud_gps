@@ -110,16 +110,8 @@ class DataFetcher:
             else:
                 return("{0}秒".format(seconds))
                 
-    async def get_data(self):  
-        # tasks = [            
-            # asyncio.create_task(self._get_ikuai_status(sess_key)),
-        # ]
-        # await asyncio.gather(*tasks)
-        
-        # _LOGGER.debug(self._data)
-        # return self._data        
-        
-
+    async def get_data(self):
+    
         if self.u_id is None:
             deviceslistinfo = await self.hass.async_add_executor_job(self._login, self.username, self.password)
             _LOGGER.debug("deviceslistinfo: %s", deviceslistinfo)
@@ -158,11 +150,11 @@ class DataFetcher:
                 speed = float(recent_location["Speed"])
                 _LOGGER.debug("speed: %s", speed)
                 if data["HD_STATE"] == 1:
-                    status = "车辆点火"
+                    acc = "车辆点火"
                 elif data["HD_STATE"] == 2:
-                    status = "车辆熄火"
+                    acc = "车辆熄火"
                 else:
-                    status = "未知"
+                    acc = "未知"
                                   
                 thislat = float(recent_location["Lat"])
                 thislon = float(recent_location["Lng"])              
@@ -175,6 +167,8 @@ class DataFetcher:
                 else:
                     runorstop = "运动"
                     parkingtime = ""
+                    
+                status = runorstop
 
                 totalKm = self.totalkm[imei]
                 
@@ -185,6 +179,7 @@ class DataFetcher:
                     "laststoptime":laststoptime,
                     "last_update":updatetime,
                     "runorstop":runorstop,
+                    "acc":acc,
                     "parkingtime":parkingtime,
                     "totalKm":totalKm
                 }
