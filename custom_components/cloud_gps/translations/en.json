@@ -24,7 +24,8 @@
 	"options": {
         "step": {
             "user":{
-                "data": {                    
+                "data": {
+                    "password": "密码或token，当原来的过期或失效时修改。",
                     "device_imei": "启用的设备唯一编号(imei、mac、id等)",
                     "attr_show": "属性中显示停车时间等更丰富信息",
 					"gps_conver": "从平台获取原始数据的座标系",
@@ -32,12 +33,12 @@
 					"sensors": "传感器",
                     "switchs": "开关",
                     "buttons": "按钮",
-                    "with_baidumap_card": "启用“baidu-map”属性,配合百度地图显示卡片",
+                    "with_map_card": "实体更多信息对话框显示地图,需已安装百度地图或墨澜地图集成",
                     "addressapi": "地址获取接口，使用 API 前请您先注册: [高德账号web服务key](https://lbs.amap.com/dev/key) , [百度账号服务端AK](https://lbsyun.baidu.com/apiconsole/key)  , [腾讯WebServiceAPI Key](https://lbs.qq.com/dev/console/application/mine) 。",
                     "api_key": "接口密钥，为空时不获取地址。",
                     "private_key": "私钥值，数字签名时填写，否则留空。"
                 },
-                "description": "更多设置，座标系：途强/中移行车卫士-WGS84，优驾-国测局。"
+                "description": "更多设置，座标系：途强/中移行车卫士-WGS84，优驾/哈啰/小牛-国测局。"
             }
         }
     },
@@ -49,23 +50,34 @@
                 "bd09": "百度坐标（BD09）"
 			}
 		},
+        "with_map_card": {
+			"options": {
+				"none": "不显示地图",
+				"baidu-map": "显示百度地图",
+                "gaode-map": "显示高德地图"
+			}
+		},
         "sensors": {
 			"options": {
 				"laststoptime": "上次停止时间",
 				"parkingtime": "停车时长",
                 "address": "当前地址",
-                "speed": "当前速度"
+                "speed": "当前速度",
+                "totalkm": "总里程",
+                "status": "车辆状态",
+                "acc": "ACC状态",
+                "powbattery": "电池电压"
 			}
 		},
         "switchs": {
 			"options": {
 				"defence": "设防",
-				"open_lock": "开锁"
+				"open_lock": "开锁启动"
 			}
 		},
         "buttons": {
 			"options": {
-				"bell": "鸣笛"
+				"bell": "鸣笛寻车"
 			}
 		},
         "addressapi": {
@@ -134,8 +146,17 @@
 					"battery": {
 					  "name": "电池电量"
 					},
-                    "voltage": {
+                    "powbatteryvoltage": {
 					  "name": "外接电压"
+					},
+                    "smallBatteryPercent": {
+					  "name": "GPS内置电池电量"
+					},
+                    "batteryvoltage": {
+					  "name": "GPS内置电池电压"
+					},
+                    "defence": {
+					  "name": "设防状态"
 					},
                     "powerStatus": {
 					  "name": "电源"
@@ -212,6 +233,66 @@
 			},
 			"speed": {
 				"name": "当前车速",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+			"totalkm": {
+				"name": "总里程",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "status": {
+				"name": "车辆状态",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+			"acc": {
+				"name": "ACC状态",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+			"powbattery": {
+				"name": "电池电压",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			}
+	    },
+		"switch": {
+			"defence": {
+				"name": "设防",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+			"open_lock": {
+				"name": "开锁启动",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			}
+	    },
+		"button": {
+			"bell": {
+				"name": "鸣笛寻车",
 				"state_attributes": {
 					"querytime": {
 					  "name": "查询时间"
