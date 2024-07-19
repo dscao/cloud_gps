@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2024-1-1
+LastEditTime  : 2024-7-19
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -84,12 +84,19 @@ from .const import (
 
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2024.1.1'
+__version__ = '2024.7.19'
 
 _LOGGER = logging.getLogger(__name__)
     
 PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
    
+WAY_BAIDU = ["/directionlite/v1/driving","/directionlite/v1/riding","/directionlite/v1/walking","/directionlite/v1/transit"]
+WAY_GAODE = ["/v3/direction/driving","/v4/direction/bicycling","/v3/direction/walking","/v3/direction/transit/integrated"]
+WAY_QQ = ["/ws/direction/v1/driving/","/ws/direction/v1/bicycling/","/ws/direction/v1/walking/","/ws/direction/v1/transit/","/ws/direction/v1/ebicycling/"]
+TACTICS_BAIDU = [0,1,2,3,4,5]
+TACTICS_GAODE = [0,13,4,2,1,5]
+TACTICS_QQ = ["LEAST_TIME","AVOID_HIGHWAY","REAL_TRAFFIC","LEAST_TIME","LEAST_FEE","HIGHROAD_FIRST"]
+
    
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up configured cloud_gps."""
@@ -127,10 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         UNDO_UPDATE_LISTENER: undo_listener,
     }
 
-    for component in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, component)
-        )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
