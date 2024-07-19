@@ -193,11 +193,11 @@ class DataFetcher:
                                   
                 thislat = float(data["lat"])
                 thislon = float(data["lng"])
-                
-                if data['equipNet'] == "0":
-                    status = "在线"
-                else:
+
+                status = "在线"
+                if data['status'] == "OFFLINE":
                     status = "离线"
+        
                 if data["status"] == "STATIC":
                     runorstop = "静止"
                     speed = 0
@@ -206,6 +206,10 @@ class DataFetcher:
                     runorstop = "运动"
                     speed = float(data.get("speed",0))
                     parkingtime = ""
+                elif data["status"] == "OFFLINE":
+                    runorstop = "离线"
+                    speed = 0
+                    parkingtime = data["statusStr"]
                 else:
                     runorstop = "未知"
                     speed = 0
