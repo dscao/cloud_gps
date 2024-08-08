@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2024-7-19
+LastEditTime  : 2024-8-8
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -49,7 +49,8 @@ from homeassistant.util import slugify
 from homeassistant.helpers.event import track_utc_time_change
 from homeassistant.util import slugify
 from homeassistant.util.location import distance
-from homeassistant.util.json import save_json, load_json
+from homeassistant.util.json import load_json
+from homeassistant.helpers.json import save_json
 
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09, bd09_to_gcj02, bd09_to_wgs84, wgs84_to_bd09
 
