@@ -8,5 +8,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/dscao/cloud_gps/issues",  
   "requirements": [],
-  "version": "2024.8.8"
+  "version": "2024.10.1"
 }
