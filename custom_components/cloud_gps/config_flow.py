@@ -101,6 +101,12 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             'language': 'zh'
         }
         url = API_HOST_TUQIANG123 + '/api/regdc'
+        verurl = API_HOST_TUQIANG123 + '/api/regdc?ver=1&method=getAuthWay&account=' + username
+        resver = self.session.get(verurl)
+        _LOGGER.debug(resver.json())
+        if not resver.json().get("data") == "":
+            msg = "账号开启了" + resver.json().get("data") + "登录二次认证，请关闭二次验证后再尝试！"
+            return {"msg":msg}
         response = self.session.post(url, data=p_data)
         _LOGGER.debug("headers: %s", self.session.headers)
         _LOGGER.debug("cookies: %s", self.session.cookies)
