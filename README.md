@@ -14,6 +14,8 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 添加集成功后，第一步需要进入选项启用设备，才会出现实现。如果没有设备，说明账号中没有可支持的gps设备。
 
+哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike
+
 
 ![11](https://github.com/dscao/cloud_gps/assets/16587914/fb3d9a8b-b7f3-48ea-92be-a37c72b62c41)
 
