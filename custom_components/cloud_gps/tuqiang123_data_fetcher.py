@@ -215,7 +215,7 @@ class DataFetcher:
                     speed = 0
                     parkingtime = data["statusStr"]
 
-                voltage = data["voltage"] if isinstance(data["voltage"], float) else 0
+                voltage = "0" if data["voltage"]=="" else data["voltage"]
                 laststoptime = data["gpsTime"]             
                 positionType = data["positionType"] if speed==0 else ""
                 
