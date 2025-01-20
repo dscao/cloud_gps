@@ -51,6 +51,7 @@ WEBHOST = {
     "tuqiang.net": "途强物联",
     "gooddriver.cn": "优驾盒子联网版", 
     "niu.com": "小牛电动车（暂未调试）",    
+    "cmobd.com": "中移行车卫士（*密码填写token）",    
     "hellobike.com": "哈啰智能芯（*密码填写token）"
 }
 
@@ -60,6 +61,7 @@ API_HOST_TOKEN_GOODDRIVER = "https://ssl.gooddriver.cn"  # "https://ssl.gooddriv
 API_URL_GOODDRIVER = "http://restcore.gooddriver.cn/API/Values/HudDeviceDetail/"
 API_HOST_TOKEN_NIU = "https://account.niu.com"
 API_URL_NIU = "https://app-api.niu.com"
+API_URL_CMOBD = "https://lsapp.cmobd.com/v360/iovsaas"
 API_URL_HELLOBIKE = "https://a.hellobike.com/evehicle/api"
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,13 +103,13 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             'language': 'zh'
         }
         url = API_HOST_TUQIANG123 + '/api/regdc'
+        response = self.session.post(url, data=p_data)
         verurl = API_HOST_TUQIANG123 + '/api/regdc?ver=1&method=getAuthWay&account=' + username
         resver = self.session.get(verurl)
         _LOGGER.debug(resver.json())
         if not resver.json().get("data") == "":
-            msg = "账号开启了" + resver.json().get("data") + "登录二次认证，请关闭二次验证后再尝试！"
+            msg = "账号开户了" + resver.json().get("data") + "登录二次认证，请关闭二次验证后再尝试！"
             return {"msg":msg}
-        response = self.session.post(url, data=p_data)
         _LOGGER.debug("headers: %s", self.session.headers)
         _LOGGER.debug("cookies: %s", self.session.cookies)
         _LOGGER.info(response.json())
@@ -164,7 +166,32 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         url = API_HOST_TOKEN_GOODDRIVER + '/UserServices/Login2018'
         response = self.session.post(url, data=json.dumps(p_data))
         return response.json()
-       
+
+    def _devicelist_cmobd(self, token):
+        url = API_URL_CMOBD
+        p_data = {
+            "cmd":"userVehicles",
+            "ver":1,
+            "token": token,
+            "pageNo":0,
+            "pageSize":10
+        }
+        resp = self.session.post(url, data=p_data).json()        
+        return resp
+        
+    def _get_cmobd_tracker(self, token, vehicleid):
+        url = API_URL_CMOBD
+        p_data = {
+           "cmd": "weappVehicleRunStatus", 
+           "ver": 1, 
+           "token": token, 
+           "vehicleId": vehicleid, 
+           "isNeedGps": "1", 
+           "gpsStartTime": ""
+        }
+        resp = self.session.post(url, data=p_data).json()
+        return resp
+        
     def _get_niu_token(self, username, password):
         url = API_HOST_TOKEN_NIU + '/v3/api/oauth2/token'
         md5 = hashlib.md5(password.encode("utf-8")).hexdigest()
@@ -361,7 +388,48 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         title=user_input[CONF_NAME], data=config_data
                     )
                 else:
-                    self._errors["base"] = "communication"            
+                    self._errors["base"] = "communication"
+            elif webhost=="cmobd.com":
+                headers = {
+                    'Host': 'lsapp.cmobd.com',                    
+                    'agent': 'Lushang/5.0.0',
+                    'Cookie': 'node-ls-api=' + password,
+                    'content-type': 'application/json',                    
+                    'User-Agent': USER_AGENT_CMOBD,
+                    'Referer': 'https://servicewechat.com/wx351871af12293380/31/page-frame.html'
+                }
+                
+                self.session.headers = headers
+
+                self.session.verify = True
+                status = await self.hass.async_add_executor_job(self._devicelist_cmobd, password)
+                _LOGGER.debug(status)
+                if status.get("result") != 0:
+                    self._errors["base"] = status.get("note")
+                    return await self._show_config_form(user_input)   
+                if status:
+                    deviceslist_data = status.get("dataList")
+                    _LOGGER.debug(deviceslist_data)
+                    for deviceslist in deviceslist_data:
+                        resp = await self.hass.async_add_executor_job(self._get_cmobd_tracker, password, str(deviceslist["vehicleID"]))
+                        if resp['result'] == 0:
+                            devices.append(str(deviceslist["vehicleID"]))
+                
+                    await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_USERNAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
+                    self._abort_if_unique_id_configured()
+                    
+                    config_data[CONF_USERNAME] = username
+                    config_data[CONF_PASSWORD] = password
+                    config_data[CONF_DEVICES] = devices
+                    config_data[CONF_WEB_HOST] = webhost
+                    
+                    _LOGGER.debug(devices)
+                    
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME], data=config_data
+                    )
+                else:
+                    self._errors["base"] = "communication"
             elif webhost=="hellobike.com":
                 headers = {
                     'content_type': 'text/plain;charset=utf-8',
@@ -431,8 +499,8 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry):
         """Initialize cloud options flow."""
-        self.config_entry = config_entry
-        self.config = dict(config_entry.data)
+        self._config_entry = config_entry
+        self._config = dict(config_entry.data)
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
@@ -441,19 +509,20 @@ class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
-            self.config.update(user_input)
+            #return self.async_create_entry(title="", data=user_input)
+            self._config.update(user_input)
             self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data=self.config
+                self._config_entry,
+                data=self._config
             )
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            return self.async_create_entry(title="", data=self.config)
+            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+            return self.async_create_entry(title="", data=self._config)
             
         listoptions = []  
-        for deviceconfig in self.config_entry.data.get(CONF_DEVICES,[]):
+        for deviceconfig in self._config_entry.data.get(CONF_DEVICES,[]):
             listoptions.append({"value": deviceconfig, "label": deviceconfig})
         
-        if self.config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
+        if self._config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -471,7 +540,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             BUTTONSLIST = [
                 {"value": "bell", "label": "bell"}
             ]
-        elif self.config_entry.data.get(CONF_WEB_HOST) == "gooddriver.cn":
+        elif self._config_entry.data.get(CONF_WEB_HOST) == "gooddriver.cn":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -484,7 +553,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
-        elif self.config_entry.data.get(CONF_WEB_HOST) == "cmobd.com":
+        elif self._config_entry.data.get(CONF_WEB_HOST) == "cmobd.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -514,10 +583,10 @@ class OptionsFlow(config_entries.OptionsFlow):
             step_id="user",            
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PASSWORD, default=self.config.get(CONF_PASSWORD)): cv.string,
+                    vol.Required(CONF_PASSWORD, default=self._config.get(CONF_PASSWORD)): cv.string,
                     vol.Optional(
                         CONF_DEVICE_IMEI, 
-                        default=self.config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
+                        default=self._config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
                         SelectSelectorConfig(
                             options=listoptions,
                             multiple=True,translation_key=CONF_DEVICE_IMEI
@@ -525,11 +594,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(CONF_UPDATE_INTERVAL, 60),
+                        default=self._config_entry.options.get(CONF_UPDATE_INTERVAL, 60),
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)), 
                     vol.Optional(
                         CONF_GPS_CONVER,
-                        default=self.config_entry.options.get(CONF_GPS_CONVER,"wgs84")
+                        default=self._config_entry.options.get(CONF_GPS_CONVER,"wgs84")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -542,11 +611,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_ATTR_SHOW,
-                        default=self.config_entry.options.get(CONF_ATTR_SHOW, True),
+                        default=self._config_entry.options.get(CONF_ATTR_SHOW, True),
                     ): bool,
                     vol.Optional(
                         CONF_WITH_MAP_CARD, 
-                        default=self.config_entry.options.get(CONF_WITH_MAP_CARD,"none")
+                        default=self._config_entry.options.get(CONF_WITH_MAP_CARD,"none")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -559,7 +628,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_SENSORS, 
-                        default=self.config_entry.options.get(CONF_SENSORS,[])
+                        default=self._config_entry.options.get(CONF_SENSORS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=SENSORSLIST,
@@ -568,7 +637,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_SWITCHS, 
-                        default=self.config_entry.options.get(CONF_SWITCHS,[])
+                        default=self._config_entry.options.get(CONF_SWITCHS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=SWITCHSLIST,
@@ -577,7 +646,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_BUTTONS, 
-                        default=self.config_entry.options.get(CONF_BUTTONS,[])
+                        default=self._config_entry.options.get(CONF_BUTTONS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=BUTTONSLIST,
@@ -586,7 +655,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_ADDRESSAPI, 
-                        default=self.config_entry.options.get(CONF_ADDRESSAPI,"none")
+                        default=self._config_entry.options.get(CONF_ADDRESSAPI,"none")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -601,11 +670,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_ADDRESSAPI_KEY, 
-                        default=self.config_entry.options.get(CONF_ADDRESSAPI_KEY,"")
+                        default=self._config_entry.options.get(CONF_ADDRESSAPI_KEY,"")
                     ): str, 
                     vol.Optional(
                         CONF_PRIVATE_KEY, 
-                        default=self.config_entry.options.get(CONF_PRIVATE_KEY,"")
+                        default=self._config_entry.options.get(CONF_PRIVATE_KEY,"")
                     ): str,
                 }
             ),

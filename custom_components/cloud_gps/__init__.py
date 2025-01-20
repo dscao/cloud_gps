@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2024-8-8
+LastEditTime  : 2025-1-5
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -136,6 +136,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         UNDO_UPDATE_LISTENER: undo_listener,
     }
 
+    # for component in PLATFORMS:
+        # hass.async_create_task(
+            # hass.config_entries.async_forward_entry_setup(entry, component)
+        # )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -194,6 +198,8 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
             from .tuqiang123_data_fetcher import DataFetcher
         elif webhost == "tuqiang.net":
             from .tuqiangnet_data_fetcher import DataFetcher
+        elif webhost == "cmobd.com":
+            from .cmobd_data_fetcher import DataFetcher
         elif webhost == "niu.com":
             from .niu_data_fetcher import DataFetcher
         elif webhost == "hellobike.com":
