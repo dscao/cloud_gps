@@ -104,10 +104,12 @@ class CloudGPSSwitchEntity(SwitchEntity):
         if self._webhost == "hellobike.com":
             if self.entity_description.key == "defence":
                 _LOGGER.debug("defence: %s", self.coordinator.data[self._imei])
-                self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
+                if self.coordinator.data[self._imei].get("attrs"):
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
             elif self.entity_description.key == "open_lock":
                 _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
-                self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已启动"
+                if self.coordinator.data[self._imei].get("attrs"):
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已启动"
      
    
     @property
