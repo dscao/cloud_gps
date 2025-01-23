@@ -33,6 +33,7 @@ from .const import (
     KEY_STATUS,
     KEY_ACC,
     KEY_BATTERY,
+    CONF_UPDATE_ADDRESSDISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
@@ -52,10 +53,11 @@ WEBHOST = {
     "gooddriver.cn": "优驾盒子联网版", 
     "niu.com": "小牛电动车（暂未调试）",    
     "cmobd.com": "中移行车卫士（*密码填写token）",    
-    "hellobike.com": "哈啰智能芯（*密码填写token）"
+    "hellobike.com": "哈啰智能芯（*密码填写token）",
+    "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）"
 }
 
-API_HOST_TUQIANG123 = "http://www.tuqiang123.com"   # http://www.tuqiangol.com 或者 http://www.tuqiang123.com
+API_HOST_TUQIANG123 = "http://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 http://www.tuqiang123.com
 API_HOST_TUQIANGNET = "https://www.tuqiang.net"
 API_HOST_TOKEN_GOODDRIVER = "https://ssl.gooddriver.cn"  # "https://ssl.gooddriver.cn" 或者 "http://121.41.101.95:8080"
 API_URL_GOODDRIVER = "http://restcore.gooddriver.cn/API/Values/HudDeviceDetail/"
@@ -63,6 +65,7 @@ API_HOST_TOKEN_NIU = "https://account.niu.com"
 API_URL_NIU = "https://app-api.niu.com"
 API_URL_CMOBD = "https://lsapp.cmobd.com/v360/iovsaas"
 API_URL_HELLOBIKE = "https://a.hellobike.com/evehicle/api"
+API_URL_AUTOAMAP = "http://ts.amap.com/ws/tservice/internal/link/mobile/get?ent=2&in="
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -243,6 +246,12 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         resp = self.session.post(url, data=json.dumps(p_data)).json()
         return resp
         
+    def _devicelist_autoamap(self, token):
+        url = str.format(API_URL_AUTOAMAP + token.split("||")[0])
+        p_data = token.split("||")[2]
+        resp = self.session.post(url, data=p_data).json()
+        return resp
+        
     async def async_step_user(self, user_input={}):
         self._errors = {}
         if user_input is not None:
@@ -333,7 +342,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     deviceslist_data = status["MESSAGE"]["USER_VEHICLEs"]
                     _LOGGER.debug(deviceslist_data)
                     for deviceslist in deviceslist_data:
-                        url = API_URL_GOODDRIVER + str(deviceslist["UV_ID"])        
+                        url = API_URL_GOODDRIVER + str(deviceslist["UV_ID"])
                         resp = await self.hass.async_add_executor_job(self.session.get, url)
                         if resp.json()['ERROR_CODE'] == 0:
                             devices.append(str(deviceslist["UV_ID"]))
@@ -452,6 +461,45 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         resp = await self.hass.async_add_executor_job(self._get_hellobike_tracker, password, str(deviceslist["bikeNo"]))
                         if resp['code'] == 0:
                             devices.append(str(deviceslist["bikeNo"]))
+                
+                    await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_USERNAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
+                    self._abort_if_unique_id_configured()
+                    
+                    config_data[CONF_USERNAME] = username
+                    config_data[CONF_PASSWORD] = password
+                    config_data[CONF_DEVICES] = devices
+                    config_data[CONF_WEB_HOST] = webhost
+                    
+                    _LOGGER.debug(devices)
+                    
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME], data=config_data
+                    )
+                else:
+                    self._errors["base"] = "communication"
+            elif webhost=="auto.amap.com":
+                headers = {
+                    'Host': 'ts.amap.com',
+                    'Accept': 'application/json',
+                    'sessionid': password.split("||")[1],
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+                    'Cookie': 'sessionid=' + password.split("||")[1],
+                    }
+                self.session.headers = headers
+                self.session.verify = True
+                
+                status = await self.hass.async_add_executor_job(self._devicelist_autoamap, password)
+                _LOGGER.debug(status)
+                
+                if status.get("result") != "true":
+                    self._errors["base"] = status.get("msg")
+                    return await self._show_config_form(user_input)
+                    
+                if status["data"].get("carLinkInfoList"):
+                    deviceslist_data = status["data"]["carLinkInfoList"]
+                    _LOGGER.debug(deviceslist_data)
+                    for deviceslist in deviceslist_data:
+                        devices.append(str(deviceslist["tid"]))
                 
                     await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_USERNAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
                     self._abort_if_unique_id_configured()
@@ -653,6 +701,10 @@ class OptionsFlow(config_entries.OptionsFlow):
                             multiple=True,translation_key=CONF_BUTTONS
                         )
                     ),
+                    vol.Optional(
+                        CONF_UPDATE_ADDRESSDISTANCE,
+                        default=self._config_entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=10000)),
                     vol.Optional(
                         CONF_ADDRESSAPI, 
                         default=self._config_entry.options.get(CONF_ADDRESSAPI,"none")

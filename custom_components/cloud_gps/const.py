@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2025.1.5"
+VERSION = "2025.1.24"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
@@ -46,6 +46,7 @@ CONF_MAP_GCJ_LAT = "map_gcj_lat"
 CONF_MAP_GCJ_LNG = "map_gcj_lng"
 CONF_MAP_BD_LAT = "map_bd_lat"
 CONF_MAP_BD_LNG = "map_bd_lng"
+CONF_UPDATE_ADDRESSDISTANCE = "address_distance"
 CONF_ADDRESSAPI = "addressapi"
 CONF_ADDRESSAPI_KEY = "api_key"
 CONF_PRIVATE_KEY = "private_key"

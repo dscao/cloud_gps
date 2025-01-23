@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-1-5
+LastEditTime  : 2025-1-23
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -55,6 +55,8 @@ from homeassistant.helpers.json import save_json
 
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09, bd09_to_gcj02, bd09_to_wgs84, wgs84_to_bd09
 
+from math import cos, asin, sqrt
+    
 from homeassistant.const import (
     Platform,
     CONF_USERNAME,
@@ -76,6 +78,7 @@ from .const import (
     CONF_DEVICE_IMEI,
     UNDO_UPDATE_LISTENER,
     CONF_ATTR_SHOW,
+    CONF_UPDATE_ADDRESSDISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
@@ -114,6 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_imei = entry.options.get(CONF_DEVICE_IMEI, [])
     update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, 60)
     attr_show = entry.options.get(CONF_ATTR_SHOW, True)
+    address_distance = entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50)
     addressapi = entry.options.get(CONF_ADDRESSAPI, "none")
     api_key = entry.options.get(CONF_ADDRESSAPI_KEY, "")
     private_key = entry.options.get(CONF_PRIVATE_KEY, "")
@@ -121,7 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     _LOGGER.debug(device_imei)
     coordinator = cloudDataUpdateCoordinator(
-        hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, addressapi, api_key, private_key
+        hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key
     )
     
     await coordinator.async_refresh()
@@ -136,10 +140,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         UNDO_UPDATE_LISTENER: undo_listener,
     }
 
-    # for component in PLATFORMS:
-        # hass.async_create_task(
-            # hass.config_entries.async_forward_entry_setup(entry, component)
-        # )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
@@ -171,7 +171,7 @@ async def update_listener(hass, entry):
 class cloudDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching cloud data API."""
 
-    def __init__(self, hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, addressapi, api_key, private_key):
+    def __init__(self, hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key):
         """Initialize."""
         self._hass = hass
         update_interval = (
@@ -184,6 +184,7 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         self._gps_conver = gps_conver
         self.device_imei = device_imei
 
+        self._address_distance = address_distance
         self._addressapi = addressapi
         self._api_key = api_key
         self._private_key = private_key
@@ -204,6 +205,8 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
             from .niu_data_fetcher import DataFetcher
         elif webhost == "hellobike.com":
             from .hellobike_data_fetcher import DataFetcher
+        elif webhost == "auto.amap.com":
+            from .autoamap_data_fetcher import DataFetcher
         else:
             _LOGGER.error("配置的平台不支持，请删除集成条目重新配置！")
             return
@@ -226,14 +229,16 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
                         data[imei]["thislon"], data[imei]["thislat"] = bd09_to_wgs84(data[imei]["thislon"], data[imei]["thislat"])
                 for imei in self.device_imei:        
                     self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
-                _LOGGER.debug("addressapi: %s", self._addressapi)
+                    if not self._coords_old.get(imei):
+                        self._coords_old[imei] = [0, 0]
+                        
                 if self._addressapi != "none" and self._addressapi != None:
-                    for imei in self.device_imei:                        
-                        if self._coords[imei] != self._coords_old.get(imei):
+                    for imei in self.device_imei: 
+                        _LOGGER.info(distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0]))
+                        if distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0]) > self._address_distance:
                             self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
                             _LOGGER.debug("api_get_address: %s", self._address.get(imei))
                         data[imei]["attrs"]["address"] = self._address.get(imei)
-                        _LOGGER.debug("[%s]_coords_old: %s ,new: %s", imei, self._coords_old[imei], self._coords[imei])
                 self.data = data
         except Exception as error:
             raise error
@@ -360,3 +365,8 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         param_str = params + private_key
         signature = hashlib.md5(param_str.encode()).hexdigest()
         return signature
+        
+    def distance(self, lat1, lon1, lat2, lon2):
+        p = 0.017453292519943295     #Pi/180
+        a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
+        return 12742 * asin(sqrt(a)) * 1000 #2*R*asin...
