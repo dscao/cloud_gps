@@ -55,7 +55,7 @@ from homeassistant.helpers.json import save_json
 
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09, bd09_to_gcj02, bd09_to_wgs84, wgs84_to_bd09
 
-from math import cos, asin, sqrt
+import math
     
 from homeassistant.const import (
     Platform,
@@ -365,11 +365,6 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         param_str = params + private_key
         signature = hashlib.md5(param_str.encode()).hexdigest()
         return signature
-        
-    def distance(self, lat1, lon1, lat2, lon2):
-        p = 0.017453292519943295
-        a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
-        return 12742 * asin(sqrt(a)) * 1000
         
     def get_distance(self, lat1, lng1, lat2, lng2):
         earth_radius = 6378.137
