@@ -234,8 +234,8 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
                         
                 if self._addressapi != "none" and self._addressapi != None:
                     for imei in self.device_imei: 
-                        _LOGGER.info(distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0]))
-                        if distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0]) > self._address_distance:
+                        distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
+                        if distance > self._address_distance:
                             self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
                             _LOGGER.debug("api_get_address: %s", self._address.get(imei))
                         data[imei]["attrs"]["address"] = self._address.get(imei)
@@ -367,6 +367,16 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         return signature
         
     def distance(self, lat1, lon1, lat2, lon2):
-        p = 0.017453292519943295     #Pi/180
+        p = 0.017453292519943295
         a = 0.5 - cos((lat2 - lat1) * p)/2 + cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2
-        return 12742 * asin(sqrt(a)) * 1000 #2*R*asin...
+        return 12742 * asin(sqrt(a)) * 1000
+        
+    def get_distance(self, lat1, lng1, lat2, lng2):
+        earth_radius = 6378.137
+        rad_lat1 = lat1 * math.pi / 180.0
+        rad_lat2 = lat2 * math.pi / 180.0
+        a = rad_lat1 - rad_lat2
+        b = lng1 * math.pi / 180.0 - lng2 * math.pi / 180.0
+        s = 2 * math.asin(math.sqrt(math.pow(math.sin(a / 2), 2) + math.cos(rad_lat1) * math.cos(rad_lat2) * math.pow(math.sin(b / 2), 2)))
+        s = s * earth_radius
+        return s * 1000
