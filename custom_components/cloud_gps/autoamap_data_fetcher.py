@@ -188,6 +188,7 @@ class DataFetcher:
                         status = "离线"
                     else:
                         onlinestatus = "未知"
+                        status = "未知"
                         
                     if onlinestatus == "离线" and (varstinydict["isonline_"+self.location_key] == "在线"):
                         varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
