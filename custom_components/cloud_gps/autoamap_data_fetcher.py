@@ -50,7 +50,6 @@ class DataFetcher:
         self.session_autoamap = requests.session()
         self.userid = None
         self.usertype = None
-        self._laststoptime = None
         self.deviceinfo = {}
         self.trackerdata = {}
         self.address = {}
@@ -74,7 +73,7 @@ class DataFetcher:
         if not varstinydict.get("lastlon_"+self.location_key):
             varstinydict["lastlon_"+self.location_key] = 0
         if not varstinydict.get("isonline_"+self.location_key):
-            varstinydict["isonline_"+self.location_key] = "no"
+            varstinydict["isonline_"+self.location_key] = "离线"
         if not varstinydict.get("lastonlinetime_"+self.location_key):
             varstinydict["lastonlinetime_"+self.location_key] = ""
         if not varstinydict.get("lastofflinetime_"+self.location_key):
@@ -155,29 +154,12 @@ class DataFetcher:
                     querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     thislat = infodata["naviLocInfo"]["lat"]
                     thislon = infodata["naviLocInfo"]["lon"]
-                    if infodata["onlineStatus"] == 1:
-                        status = "在线"
-                    elif infodata["onlineStatus"] == 0:
-                        status = "离线"
-                    else:
-                        status = "未知"
-                        
-                    if infodata['naviStatus'] == 1:
-                        naviStatus = "导航中"
-                    else:
-                        naviStatus = "未导航"
-                        
-                    if status == "离线" and (varstinydict["isonline_"+self.location_key] == "yes"):
-                        varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        varstinydict["isonline_"+self.location_key] = "no"
-                    if status == "在线" and (varstinydict["isonline_"+self.location_key] == "no"):
-                        varstinydict["lastonlinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        varstinydict["isonline_"+self.location_key] = "yes"            
                     
                     distance = self.get_distance(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
-                    if distance > 20:
+                    
+                    if distance > 10:
                         _LOGGER.debug("状态为运动: %s ,%s ,%s", varstinydict,thislat,thislon)
-                        
+                        status = "运动"
                         distancetime = (datetime.datetime.now() - self.lastgpstime).total_seconds()
                         if distancetime > 1 and distance < 10000:
                             varstinydict["speed_"+self.location_key] = round((distance / distancetime * 3.6), 1)
@@ -188,9 +170,31 @@ class DataFetcher:
                         varstinydict["lastlon_"+self.location_key] = thislon
                     elif varstinydict["runorstop_"+self.location_key] == "run":
                         _LOGGER.debug("变成静止: %s", varstinydict)
+                        status = "静止"
                         varstinydict["laststoptime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         varstinydict["runorstop_"+self.location_key] = "stop"
                         varstinydict["speed_"+self.location_key] = 0
+                        
+                    if infodata['naviStatus'] == 1:
+                        naviStatus = "导航中"
+                        status = "导航中"
+                    else:
+                        naviStatus = "未导航"
+                        
+                    if infodata["onlineStatus"] == 1:
+                        onlinestatus = "在线"
+                    elif infodata["onlineStatus"] == 0:
+                        onlinestatus = "离线"
+                        status = "离线"
+                    else:
+                        onlinestatus = "未知"
+                        
+                    if onlinestatus == "离线" and (varstinydict["isonline_"+self.location_key] == "在线"):
+                        varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        varstinydict["isonline_"+self.location_key] = "离线"
+                    if onlinestatus == "在线" and (varstinydict["isonline_"+self.location_key] == "离线"):
+                        varstinydict["lastonlinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        varstinydict["isonline_"+self.location_key] = "在线" 
                 
                     lastofflinetime = varstinydict["lastofflinetime_"+self.location_key]
                     lastonlinetime = varstinydict["lastonlinetime_"+self.location_key]
@@ -209,8 +213,9 @@ class DataFetcher:
                         "querytime": querytime,
                         "speed": speed,
                         "course": course,
+                        "distance": distance,
                         "runorstop": runorstop,
-                        "laststoptime": self._laststoptime,
+                        "laststoptime": laststoptime,
                         "parkingtime": parkingtime,
                         "naviStatus": naviStatus,
                         "onlinestatus": onlinestatus,
