@@ -201,10 +201,13 @@ class DataFetcher:
                 positionType = "GPS" if data["locType"] == "0" else "基站定位"
                 if data['status'] == "2":
                     status = "在线"
+                    onlinestatus = "在线"
                 elif data['status'] == "3":
                     status = "在线"
+                    onlinestatus = "在线"
                 else:
                     status = "离线"
+                    onlinestatus = "离线"
                     
                 if self._lat_old != thislat or self._lon_old != thislon:
                     self.address[imei] = await self.hass.async_add_executor_job(self._get_device_address, thislat, thislon)
@@ -222,6 +225,7 @@ class DataFetcher:
                     "laststoptime":laststoptime,
                     "last_update":updatetime,
                     "runorstop":runorstop,
+                    "onlinestatus": onlinestatus,
                     "acc":acc,
                     "powerStatus":powerStatus,
                     "parkingtime":parkingtime,

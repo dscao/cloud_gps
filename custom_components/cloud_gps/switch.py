@@ -89,7 +89,7 @@ class CloudGPSSwitchEntity(SwitchEntity):
         self.coordinator = coordinator
         _LOGGER.debug("SwitchEntity coordinator: %s", coordinator.data)
         self._unique_id = f"{self.coordinator.data[self._imei]['location_key']}-{description.key}"
-
+        self._attr_available = False if self.coordinator.data[self._imei]["attrs"].get("onlinestatus") == "离线" else True
         self._attr_translation_key = f"{self.entity_description.name}"
         
         self._is_on = None

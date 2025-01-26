@@ -195,8 +195,10 @@ class DataFetcher:
                 thislon = float(data["lng"])
                 
                 status = "在线"
+                onlinestatus = "在线"
                 if data['status'] == "OFFLINE":
                     status = "离线"
+                    onlinestatus = "离线"
         
                 if data["status"] == "STATIC":
                     runorstop = "静止"
@@ -234,6 +236,7 @@ class DataFetcher:
                     "laststoptime":laststoptime,
                     "last_update":updatetime,
                     "runorstop":runorstop,
+                    "onlinestatus": onlinestatus,
                     "acc":acc,
                     "powerStatus":powerStatus,
                     "parkingtime":parkingtime,
