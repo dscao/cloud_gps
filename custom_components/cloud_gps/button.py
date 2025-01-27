@@ -81,7 +81,6 @@ class CloudGPSButtonEntity(ButtonEntity):
         self.coordinator = coordinator
         _LOGGER.debug("ButtonEntity coordinator: %s", coordinator.data)
         self._unique_id = f"{self.coordinator.data[self._imei]['location_key']}-{description['label']}"
-        self._attr_available = False if self.coordinator.data[self._imei]["attrs"].get("onlinestatus") == "离线" else True
         self._attr_translation_key = f"{description['name']}"
         self._state = None
         headers = {
@@ -116,6 +115,11 @@ class CloudGPSButtonEntity(ButtonEntity):
         """Return the state."""
         return self._state
 
+    @property
+    def available(self):
+        """Return the available."""
+        attr_available = False if self.coordinator.data[self._imei]["attrs"].get("onlinestatus") == "离线" else True
+        return attr_available
         
     @property
     def device_class(self):
