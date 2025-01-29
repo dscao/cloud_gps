@@ -41,6 +41,11 @@ SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
         key="open_lock",
         name="open_lock",
         icon="mdi:lock-open"
+    ),
+    SwitchEntityDescription(
+        key="defencemode",
+        name="defencemode",
+        icon="mdi:lock-open"
     )
 )
 
@@ -55,6 +60,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Add Switchentities from a config_entry."""      
     coordinator = hass.data[DOMAIN][config_entry.entry_id][COORDINATOR]
     webhost = config_entry.data[CONF_WEB_HOST]
+    username = config_entry.data[CONF_USERNAME]
     password = config_entry.data[CONF_PASSWORD]
     enabled_switchs = [s for s in config_entry.options.get(CONF_SWITCHS, []) if s in SWITCH_TYPES_KEYS]
     
@@ -68,7 +74,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         switchs = []
         for switch_type in enabled_switchs:
             _LOGGER.debug("switch_type: %s" ,switch_type)
-            switchs.append(CloudGPSSwitchEntity(hass, webhost, password, coordinatordata, SWITCH_TYPES_MAP[switch_type], coordinator))
+            switchs.append(CloudGPSSwitchEntity(hass, webhost, username, password, coordinatordata, SWITCH_TYPES_MAP[switch_type], coordinator))
             
         async_add_entities(switchs, False)           
             
@@ -77,13 +83,14 @@ class CloudGPSSwitchEntity(SwitchEntity):
     """Define an switch entity."""
     _attr_has_entity_name = True
       
-    def __init__(self, hass, webhost, password, imei, description, coordinator):
+    def __init__(self, hass, webhost, username, password, imei, description, coordinator):
         """Initialize."""
         super().__init__()
         self.entity_description = description
         self.session_hellobike = requests.session()
         self._hass = hass
         self._webhost = webhost
+        self._username = username
         self._password = password
         self._imei = imei        
         self.coordinator = coordinator
@@ -94,21 +101,16 @@ class CloudGPSSwitchEntity(SwitchEntity):
         self._is_on = None
         self._doing = False
         
-        headers = {
-            'content-type': 'application/json; charset=utf-8',                    
-            'User-Agent': HELLOBIKE_USER_AGENT
-        }
-        self.session_hellobike.headers.update(headers)
+        if webhost == "tuqiang123.com":
+            from .tuqiang123_data_fetcher import DataSwitch
+        elif webhost == "hellobike.com":
+            from .hellobike_data_fetcher import DataSwitch
+        else:
+            _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
+            return
         
-        if self._webhost == "hellobike.com":
-            if self.entity_description.key == "defence":
-                _LOGGER.debug("defence: %s", self.coordinator.data[self._imei])
-                if self.coordinator.data[self._imei].get("attrs"):
-                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
-            elif self.entity_description.key == "open_lock":
-                _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
-                if self.coordinator.data[self._imei].get("attrs"):
-                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已启动"
+        self._switch = DataSwitch(hass, username, password, imei)
+        
      
    
     @property
@@ -137,7 +139,7 @@ class CloudGPSSwitchEntity(SwitchEntity):
     def is_on(self):
         """Check if switch is on."""        
         return self._is_on
-
+        
     @property
     def available(self):
         """Return the available."""
@@ -154,54 +156,14 @@ class CloudGPSSwitchEntity(SwitchEntity):
     async def async_turn_on(self, **kwargs):
         """Turn switch on."""        
         self._doing = True
-        if self.entity_description.key == "defence":
-            if self._webhost == "hellobike.com":
-                url = "https://a.hellobike.com/evehicle/api?rent.order.setUpDefence"
-                json_body = {
-                    "action": "rent.order.setUpDefence",
-                    "maction": "SET_DEFENCE",
-                    "bikeNo": self._imei,
-                    "token": self._password,
-                    "apiVersion": "2.23.0"
-                }
-                await self._switch(url, json_body)
-        elif self.entity_description.key == "open_lock":
-            if self._webhost == "hellobike.com":
-                url = "https://a.hellobike.com/evehicle/api?rent.order.openLock"
-                json_body = {
-                    "action": "rent.order.openLock",
-                    "bikeNo": self._imei,
-                    "token": self._password,
-                    "apiVersion": "2.23.0"
-                }
-                await self._switch(url, json_body)
+        await self._switch._turn_on(self.entity_description.key)
         self._is_on = True
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
         """Turn switch off."""        
         self._doing = True
-        if self.entity_description.key == "defence":
-            if self._webhost == "hellobike.com":
-                url = "https://a.hellobike.com/evehicle/api?rent.order.withdrawDefence"
-                json_body = {
-                    "action": "rent.order.withdrawDefence",
-                    "maction": "WITHDRAW_DEFENCE",
-                    "bikeNo": self._imei,
-                    "token": self._password,
-                    "apiVersion": "2.23.0"
-                }
-                await self._switch(url, json_body)
-        elif self.entity_description.key == "open_lock":
-            if self._webhost == "hellobike.com":
-                url = "https://a.hellobike.com/evehicle/api?rent.order.closeLockCommand"
-                json_body = {
-                    "action": "rent.order.closeLockCommand",
-                    "bikeNo": self._imei,
-                    "token": self._password,
-                    "apiVersion": "2.23.0"
-                }
-                await self._switch(url, json_body)
+        await self._switch._turn_off(self.entity_description.key)
         self._is_on = False
         await self.coordinator.async_request_refresh()
         
@@ -214,30 +176,24 @@ class CloudGPSSwitchEntity(SwitchEntity):
     async def async_update(self):
         """Update entity."""
         _LOGGER.debug("刷新switch数据")
-        await self.coordinator.async_request_refresh()
+        # await self.coordinator.async_request_refresh()
         if self._doing == False:
             if self._webhost == "hellobike.com":
                 if self.entity_description.key == "defence":
                     _LOGGER.debug("defence: %s", self.coordinator.data[self._imei])
                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
-                elif self.entity_description.key == "open_lock":
+                elif self.entity_description.key == "defencemod":
+                    _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已"
+                    
+            elif self._webhost == "tuqiang123.com":
+                if self.entity_description.key == "defence":
+                    _LOGGER.debug("defence: %s", self.coordinator.data[self._imei])
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
+                elif self.entity_description.key == "defencemode":
                     _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已启动"
+                    
         self._doing = False
     
-    def _post_data(self, url, p_data):
-        _LOGGER.debug("Requests remaining: %s , body: %s", url, json.dumps(p_data))
-        resp = self.session_hellobike.post(url, data=json.dumps(p_data)).json()        
-        
-        return resp
-        
-    async def _switch(self, url, action_body):       
-        try:
-            async with timeout(5): 
-                resdata = await self._hass.async_add_executor_job(self._post_data, url, action_body)
-        except (
-            ClientConnectorError
-        ) as error:
-            raise UpdateFailed(error)
-        _LOGGER.info("操作cloudgps: %s ", resdata) 
-        return "OK"
+    

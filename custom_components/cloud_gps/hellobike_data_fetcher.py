@@ -43,8 +43,8 @@ class DataFetcher:
     def __init__(self, hass, username, password, device_imei, location_key):
         self.hass = hass
         self.location_key = location_key
-        self.username = username
-        self.password = password
+        self._username = username
+        self._password = password
         self.device_imei = device_imei        
         self.session_hellobike = requests.session()
         self.cloudpgs_token = None
@@ -106,7 +106,7 @@ class DataFetcher:
     async def get_data(self):
     
         if self.deviceinfo == {}:
-            deviceslistinfo = await self.hass.async_add_executor_job(self._devicelist_hellobike, self.password)
+            deviceslistinfo = await self.hass.async_add_executor_job(self._devicelist_hellobike, self._password)
             _LOGGER.debug("deviceslistinfo: %s", deviceslistinfo)
             if deviceslistinfo.get("code") != 0:
                 _LOGGER.error("请求api错误: %s", deviceslistinfo.get("msg"))
@@ -126,7 +126,7 @@ class DataFetcher:
                                
             try:
                 async with timeout(10): 
-                    data =  await self.hass.async_add_executor_job(self._get_device_tracker_hellobike, self.password, imei)           
+                    data =  await self.hass.async_add_executor_job(self._get_device_tracker_hellobike, self._password, imei)           
             except Exception as error:
                 raise
 
@@ -231,7 +231,115 @@ class DataFetcher:
                 self.trackerdata[imei] = {"location_key":self.location_key+str(imei),"deviceinfo":self.deviceinfo[imei],"thislat":thislat,"thislon":thislon,"status":status,"attrs":attrs}
 
         return self.trackerdata
+        
 
 
 class GetDataError(Exception):
     """request error or response data is unexpected"""
+    
+    
+class DataButton:
+
+    def __init__(self, hass, username, password, device_imei):
+        self.hass = hass
+        self._username = username
+        self._password = password
+        self.device_imei = device_imei        
+        self.session_hellobike = requests.session()
+        self.cloudpgs_token = None
+        
+        headers = {
+            'content-type': 'application/json; charset=utf-8',                    
+            'User-Agent': HELLOBIKE_USER_AGENT
+        }
+        self.session_hellobike.headers.update(headers)
+    
+    def _post_data(self, url, p_data):
+        resp = self.session_hellobike.post(url, data=json.dumps(p_data)).json()
+        return resp
+        
+    async def _action(self, action): 
+        json_body = {
+            "bikeNo" : str(self.device_imei),
+            "token" : self._password,
+            "action" : action,
+            "apiVersion": "2.23.0"
+        }
+        url =  HELLOBIKE_API_URL + "?" + action
+        
+        try:
+            async with timeout(10): 
+                resdata = await self.hass.async_add_executor_job(self._post_data, url, json_body)
+        except (
+            ClientConnectorError
+        ) as error:
+            raise UpdateFailed(error)
+        _LOGGER.debug("Requests remaining: %s", url)
+        _LOGGER.debug(resdata)                        
+        state = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _LOGGER.info("操作cloudgps: %s ", json_body)    
+        return state
+
+
+
+class DataSwitch:
+
+    def __init__(self, hass, username, password, device_imei):
+        self.hass = hass
+        self._username = username
+        self._password = password
+        self.device_imei = device_imei        
+        self.session_hellobike = requests.session()
+        self.cloudpgs_token = None
+        
+        headers = {
+            'content-type': 'application/json; charset=utf-8',                    
+            'User-Agent': HELLOBIKE_USER_AGENT
+        }
+        self.session_hellobike.headers.update(headers)
+    
+    def _post_data(self, url, p_data):
+        resp = self.session_hellobike.post(url, data=json.dumps(p_data)).json()
+        return resp
+        
+    async def _turn_on(self, action): 
+        if action == "defence":
+            url = "https://a.hellobike.com/evehicle/api?rent.order.setUpDefence"
+            json_body = {
+                "action": "rent.order.setUpDefence",
+                "maction": "SET_DEFENCE",
+                "bikeNo": self.device_imei,
+                "token": self._password,
+                "apiVersion": "2.23.0"
+            }
+            await self.hass.async_add_executor_job(self._post_data, url, json_body)
+        elif action == "open_lock":
+            url = "https://a.hellobike.com/evehicle/api?rent.order.openLock"
+            json_body = {
+                "action": "rent.order.openLock",
+                "bikeNo": self.device_imei,
+                "token": self._password,
+                "apiVersion": "2.23.0"
+            }
+            await self.hass.async_add_executor_job(self._post_data, url, json_body)
+            
+    async def _turn_off(self, action): 
+        if action == "defence":
+            url = "https://a.hellobike.com/evehicle/api?rent.order.setUpDefence"
+            json_body = {
+                "action": "rent.order.setUpDefence",
+                "maction": "WITHDRAW_DEFENCE",
+                "bikeNo": self.device_imei,
+                "token": self._password,
+                "apiVersion": "2.23.0"
+            }
+            await self.hass.async_add_executor_job(self._post_data, url, json_body)
+        elif action == "open_lock":
+            url = "https://a.hellobike.com/evehicle/api?rent.order.openLock"
+            json_body = {
+                "action": "rent.order.closeLockCommand",
+                "bikeNo": self.device_imei,
+                "token": self._password,
+                "apiVersion": "2.23.0"
+            }
+            await self.hass.async_add_executor_job(self._post_data, url, json_body)

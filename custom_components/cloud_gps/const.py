@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2025.1.24"
+VERSION = "2025.1.29"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
@@ -54,6 +54,8 @@ CONF_WITH_MAP_CARD = "with_map_card"
 
 COORDINATOR = "coordinator"
 UNDO_UPDATE_LISTENER = "undo_update_listener"
+
+PWD_NOT_CHANGED = "__**password_not_changed**__"
 
 KEY_ADDRESS = "address"
 KEY_QUERYTIME = "querytime"

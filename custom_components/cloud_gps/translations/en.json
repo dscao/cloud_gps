@@ -72,12 +72,14 @@
         "switchs": {
 			"options": {
 				"defence": "设防",
+                "defencemode": "自动设防模式",
 				"open_lock": "开锁启动"
 			}
 		},
         "buttons": {
 			"options": {
-				"bell": "鸣笛寻车"
+				"bell": "鸣笛寻车",
+                "nowtrack": "立即定位"
 			}
 		},
         "addressapi": {
@@ -281,6 +283,14 @@
 					}
 				}
 			},
+            "defencemode": {
+				"name": "自动设防模式",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
 			"open_lock": {
 				"name": "开锁启动",
 				"state_attributes": {
@@ -293,6 +303,14 @@
 		"button": {
 			"bell": {
 				"name": "鸣笛寻车",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "nowtrack": {
+				"name": "立即定位",
 				"state_attributes": {
 					"querytime": {
 					  "name": "查询时间"

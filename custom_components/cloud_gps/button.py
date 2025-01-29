@@ -37,7 +37,12 @@ BUTTON_TYPES = {
         "name": "bell",
         "icon": "mdi:bell",
         "device_class": "restart",
-        "action_body": "rent.order.bell"
+    },
+    "nowtrack": {
+        "label": "nowtrack",
+        "name": "nowtrack",
+        "icon": "mdi:map-marker-check",
+        "device_class": "restart",
     }
 }
 
@@ -48,6 +53,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Add buttonentities from a config_entry."""      
     coordinator = hass.data[DOMAIN][config_entry.entry_id][COORDINATOR]
     webhost = config_entry.data[CONF_WEB_HOST]
+    username = config_entry.data[CONF_USERNAME]
     password = config_entry.data[CONF_PASSWORD]
     enabled_buttons = [s for s in config_entry.options.get(CONF_BUTTONS, []) if s in BUTTON_TYPES_KEYS]
     
@@ -59,7 +65,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         buttons = []
         for button_type in enabled_buttons:
             _LOGGER.debug("button_type: %s" ,button_type)
-            buttons.append(CloudGPSButtonEntity(hass, webhost, password, coordinatordata, BUTTON_TYPES[button_type], coordinator))
+            buttons.append(CloudGPSButtonEntity(hass, webhost, username, password, coordinatordata, BUTTON_TYPES[button_type], coordinator))
             
         async_add_entities(buttons, False)            
 
@@ -68,7 +74,7 @@ class CloudGPSButtonEntity(ButtonEntity):
     """Define an button entity."""
     _attr_has_entity_name = True
     
-    def __init__(self, hass, webhost, password, imei, description, coordinator):
+    def __init__(self, hass, webhost, username, password, imei, description, coordinator):
         """Initialize."""
         super().__init__()
         self._attr_icon = description['icon']
@@ -76,6 +82,7 @@ class CloudGPSButtonEntity(ButtonEntity):
         self._description = description
         self.session_hellobike = requests.session()
         self._webhost = webhost
+        self._username = username
         self._password = password
         self._imei = imei        
         self.coordinator = coordinator
@@ -83,11 +90,16 @@ class CloudGPSButtonEntity(ButtonEntity):
         self._unique_id = f"{self.coordinator.data[self._imei]['location_key']}-{description['label']}"
         self._attr_translation_key = f"{description['name']}"
         self._state = None
-        headers = {
-            'content-type': 'application/json; charset=utf-8',                    
-            'User-Agent': HELLOBIKE_USER_AGENT
-        }
-        self.session_hellobike.headers.update(headers)
+        if webhost == "tuqiang123.com":
+            from .tuqiang123_data_fetcher import DataButton
+        elif webhost == "hellobike.com":
+            from .hellobike_data_fetcher import DataButton
+        else:
+            _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
+            return
+        
+        self._button = DataButton(hass, username, password, imei)
+        
 
     @property
     def unique_id(self):
@@ -133,8 +145,10 @@ class CloudGPSButtonEntity(ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        if self._webhost == "hellobike.com":
-            await self._hellobaike_bell_action()
+        if self._webhost == "hellobike.com" and self._description['label']=="bell":
+            self._state = await self._button._action("rent.order.bell")
+        elif self._webhost == "tuqiang123.com" and self._description['label']=="nowtrack":
+            self._state = await self._button._action("立即定位")
         
 
     async def async_added_to_hass(self):
@@ -147,29 +161,4 @@ class CloudGPSButtonEntity(ButtonEntity):
         """Update entity."""
         #await self.coordinator.async_request_refresh()        
     
-    def _post_data(self, url, p_data):
-        resp = self.session_hellobike.post(url, data=json.dumps(p_data)).json()
-        return resp
-        
-    async def _hellobaike_bell_action(self): 
-        json_body = {
-            "bikeNo" : str(self._imei),
-            "token" : self._password,
-            "action" : "rent.order.bell",
-            "apiVersion": "2.23.0"
-        }
-        url =  API_URL_HELLOBIKE + "?rent.order.bell"
-        
-        try:
-            async with timeout(10): 
-                resdata = await self._hass.async_add_executor_job(self._post_data, url, json_body)
-        except (
-            ClientConnectorError
-        ) as error:
-            raise UpdateFailed(error)
-        _LOGGER.debug("Requests remaining: %s", url)
-        _LOGGER.debug(resdata)                        
-        self._state = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        _LOGGER.info("操作cloudgps: %s ", json_body)    
-        return
         

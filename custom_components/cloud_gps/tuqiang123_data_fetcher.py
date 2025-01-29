@@ -179,8 +179,9 @@ class DataFetcher:
                 imei = data["imei"]
                 
                 direction = data["direction"]
-                speed = data.get("speed",0)                
-                
+                speed = data.get("speed",0)
+                gpssignal = data.get("gPSSignal", 0)
+
                 if data['acc'] == "1":
                     acc = "点火"
                 else:
@@ -196,25 +197,28 @@ class DataFetcher:
                 
                 status = "在线"
                 onlinestatus = "在线"
-                if data['status'] == "OFFLINE":
-                    status = "离线"
-                    onlinestatus = "离线"
         
                 if data["status"] == "STATIC":
                     runorstop = "静止"
                     speed = 0
                     parkingtime = data["statusStr"]
+                    statustime = data["statusStr"]
                 elif data["status"] == "MOVE":
                     runorstop = "运动"
                     speed = float(data.get("speed",0))
                     parkingtime = ""
+                    statustime = data["statusStr"]
                 elif data["status"] == "OFFLINE":
                     runorstop = "离线"
+                    onlinestatus = "离线"
                     speed = 0
-                    parkingtime = data["statusStr"]
+                    parkingtime = data.get("statusAbstract")
+                    statustime = data["statusStr"]
                 else:
                     runorstop = "未知"
                     speed = 0
+                    parkingtime = ""
+                    statustime = ""
 
                 voltage = "0" if data["voltage"]=="" else data["voltage"]
                 laststoptime = data["gpsTime"]             
@@ -232,6 +236,7 @@ class DataFetcher:
                 attrs ={
                     "course":direction,
                     "speed":speed,
+                    "gpssignal": gpssignal,
                     "querytime":querytime,
                     "laststoptime":laststoptime,
                     "last_update":updatetime,
@@ -243,7 +248,8 @@ class DataFetcher:
                     "address":address,
                     "powbatteryvoltage":voltage,
                     "totalKm":totalKm,
-                    "positionType":positionType
+                    "positionType":positionType,
+                    "statustime": statustime
                 }
                 
                 self.trackerdata[imei] = {"location_key":self.location_key+imei,"deviceinfo":self.deviceinfo[imei],"thislat":thislat,"thislon":thislon,"imei":imei,"status":status,"attrs":attrs}
@@ -253,3 +259,199 @@ class DataFetcher:
 
 class GetDataError(Exception):
     """request error or response data is unexpected"""
+
+
+class DataButton:
+
+    def __init__(self, hass, username, password, device_imei):
+        self.hass = hass
+        self._username = username
+        self._password = password
+        self.device_imei = device_imei        
+        self.session_tuqiang123 = requests.session()
+        self.userid = None
+        self.usertype = None
+        
+        headers = {
+            'User-Agent': TUQIANG_USER_AGENT
+        }
+        self.session_tuqiang123.headers.update(headers)  
+    
+    def _encode(self, code):
+        en_code = ''
+        for s in code:
+            en_code = en_code + str(ord(s)) + '|'
+        return en_code[:-1]
+
+    def _login(self, username, password):
+        p_data = {
+            'ver': '1',
+            'method': 'login',
+            'account': username,
+            'password': self._encode(password),
+            'language': 'zh'
+        }
+        url = TUQIANG123_API_HOST + '/api/regdc'
+        response = self.session_tuqiang123.post(url, data=p_data)
+        _LOGGER.debug("TUQIANG123_API_HOST cookies: %s", self.session_tuqiang123.cookies)
+        _LOGGER.debug(response.json())
+        if response.json()['code'] == 0:
+            self._get_userid()
+            return True
+        else:
+            return False
+
+    def _get_userid(self):
+        url = TUQIANG123_API_HOST + '/customer/getProviderList'
+        resp = self.session_tuqiang123.post(url, data=None).json()
+        self.userid = resp['data']['user']['userId']
+        self.usertype = resp['data']['user']['type']
+        
+    def _do_action(self, action):
+        url = TUQIANG123_API_HOST + '/device/sendIns'
+        p_data = {
+            'imei': self.device_imei,
+            'orderContent': 'GPSON#',
+            'instructionId': 111845,
+            'instructionName': action,
+            'instructionPwd': '',
+            'isUsePwd': 0,
+            'isOffLine': 1
+        }
+        resp = self.session_tuqiang123.post(url, data=p_data)
+        return resp.json()
+        
+    async def _action(self, action): 
+        
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self._username, self._password)
+
+        resp = await self.hass.async_add_executor_job(self._do_action, action)
+        _LOGGER.debug(resp)                        
+        state = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
+        return state
+        
+        
+class DataSwitch:
+
+    def __init__(self, hass, username, password, device_imei):
+        self.hass = hass
+        self._username = username
+        self._password = password
+        self.device_imei = device_imei
+        self.session_tuqiang123 = requests.session()
+        self.userid = None
+        self.usertype = None
+        
+        headers = {
+            'User-Agent': TUQIANG_USER_AGENT
+        }
+        self.session_tuqiang123.headers.update(headers)  
+    
+    def _encode(self, code):
+        en_code = ''
+        for s in code:
+            en_code = en_code + str(ord(s)) + '|'
+        return en_code[:-1]
+
+    def _login(self, username, password):
+        p_data = {
+            'ver': '1',
+            'method': 'login',
+            'account': username,
+            'password': self._encode(password),
+            'language': 'zh'
+        }
+        url = TUQIANG123_API_HOST + '/api/regdc'
+        response = self.session_tuqiang123.post(url, data=p_data)
+        _LOGGER.debug("TUQIANG123_API_HOST cookies: %s", self.session_tuqiang123.cookies)
+        _LOGGER.debug(response.json())
+        if response.json()['code'] == 0:
+            self._get_userid()
+            return True
+        else:
+            return False
+
+    def _get_userid(self):
+        url = TUQIANG123_API_HOST + '/customer/getProviderList'
+        resp = self.session_tuqiang123.post(url, data=None).json()
+        self.userid = resp['data']['user']['userId']
+        self.usertype = resp['data']['user']['type']
+        
+    def _do_action(self, url, body):
+        url = url
+        p_data = body
+        resp = self.session_tuqiang123.post(url, data=p_data)
+        return resp.json()       
+        
+    async def _turn_on(self, action): 
+        
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self._username, self._password)
+
+        if action == "defence":
+            url = TUQIANG123_API_HOST + '/device/sendIns'
+            json_body = {
+                'imei': self.device_imei,
+                'orderContent': '111#',
+                'instructionId': 97,
+                'instructionName': "设防",
+                'instructionPwd': '',
+                'isUsePwd': 0,
+                'isOffLine': 1
+            }
+            resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
+            _LOGGER.debug("Requests remaining: %s", url)
+            _LOGGER.debug(resp)  
+        elif action == "defencemode":
+            url = TUQIANG123_API_HOST + '/device/sendIns'
+            json_body = {
+                'imei': self.device_imei,
+                'orderContent': 'DEFMODE,{0}#',
+                'instructionId': 98,
+                'instructionName': "设防模式",
+                'param': '22342,0',
+                'instructionPwd': '',
+                'isUsePwd': 0,
+                'isOffLine': 1
+            }
+            resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
+            _LOGGER.debug("Requests remaining: %s", url)
+            _LOGGER.debug(resp)  
+
+            
+    async def _turn_off(self, action): 
+        
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self._username, self._password)
+
+        if action == "defence":
+            url = TUQIANG123_API_HOST + '/device/sendIns'
+            json_body = {
+                'imei': self.device_imei,
+                'orderContent': '000#',
+                'instructionId': 118,
+                'instructionName': "撤防",
+                'instructionPwd': '',
+                'isUsePwd': 0,
+                'isOffLine': 1
+            }
+            resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
+            _LOGGER.debug("Requests remaining: %s", url)
+            _LOGGER.debug(resp.text())  
+            
+        elif action == "defencemode":
+            url = TUQIANG123_API_HOST + '/device/sendIns'
+            json_body = {
+                'imei': self.device_imei,
+                'orderContent': 'DEFMODE,{0}#',
+                'instructionId': 98,
+                'instructionName': "设防模式",
+                'param': '22342,1',
+                'instructionPwd': '',
+                'isUsePwd': 0,
+                'isOffLine': 1
+            }
+            resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
+            _LOGGER.debug("Requests remaining: %s", url)
+            _LOGGER.debug(resp)  

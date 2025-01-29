@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-1-23
+LastEditTime  : 2025-1-29
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -89,7 +89,7 @@ from .const import (
 
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2024.7.19'
+__version__ = '2025.1.28'
 
 _LOGGER = logging.getLogger(__name__)
     

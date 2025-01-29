@@ -17,6 +17,7 @@ from .const import (
     CONF_GPS_CONVER,
     CONF_UPDATE_INTERVAL,
     CONF_ATTR_SHOW,
+    PWD_NOT_CHANGED,
     DOMAIN,
     CONF_WEB_HOST,
     CONF_DEVICES,
@@ -46,6 +47,7 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 USER_AGENT_CMOBD = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.43(0x18002b2d) NetType/4G Language/zh_CN'
 USER_AGENT_NIU = 'manager/4.6.48 (android; IN2020 11);lang=zh-CN;clientIdentifier=Domestic;timezone=Asia/Shanghai;model=IN2020;deviceName=IN2020;ostype=android'
 USER_AGENT_GOODDRIVER = 'gooddriver/7.9.1 CFNetwork/1410.0.3 Darwin/22.6.0'
+
 
 WEBHOST = {    
     "tuqiang123.com": "途强在线",
@@ -553,12 +555,32 @@ class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         """Manage the options."""
         return await self.async_step_user()
+        
+    def update_password_from_user_input(self, entry_password: str | None, user_input: dict[str, any]) -> dict[str, any]:
+        """Update the password if the entry has been updated.
+
+        As we want to avoid reflecting the stored password in the UI,
+        we replace the suggested value in the UI with a sentinel,
+        and we change it back here if it was changed.
+        """
+        substituted_used_data = dict(user_input)
+        # Take out the password submitted
+        user_password: str | None = substituted_used_data.pop(CONF_PASSWORD, None)
+        # Only add the password if it has changed.
+        # If the sentinel password is submitted, we replace that with our current
+        # password from the config entry data.
+        password_changed = user_password is not None and user_password != PWD_NOT_CHANGED
+        password = user_password if password_changed else entry_password
+        substituted_used_data[CONF_PASSWORD] = password
+        return substituted_used_data
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
             #return self.async_create_entry(title="", data=user_input)
-            self._config.update(user_input)
+            #self._config.update(user_input)
+            updated_user_input = self.update_password_from_user_input(self._config.get("password"), user_input)
+            self._config.update(updated_user_input)
             self.hass.config_entries.async_update_entry(
                 self._config_entry,
                 data=self._config
@@ -570,7 +592,22 @@ class OptionsFlow(config_entries.OptionsFlow):
         for deviceconfig in self._config_entry.data.get(CONF_DEVICES,[]):
             listoptions.append({"value": deviceconfig, "label": deviceconfig})
         
-        if self._config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
+        if self._config_entry.data.get(CONF_WEB_HOST) == "tuqiang123.com":
+            SENSORSLIST = [
+                {"value": KEY_PARKING_TIME, "label": "parkingtime"},
+                {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
+                {"value": KEY_ADDRESS, "label": "address"},
+                {"value": KEY_SPEED, "label": "speed"},
+                {"value": KEY_TOTALKM, "label": "totalkm"},
+                {"value": KEY_STATUS, "label": "status"},
+                {"value": KEY_ACC, "label": "acc"},
+                {"value": KEY_BATTERY, "label": "powbattery"}
+            ]
+            SWITCHSLIST = []
+            BUTTONSLIST = [
+                {"value": "nowtrack", "label": "nowtrack"}
+            ]
+        elif self._config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -613,6 +650,17 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
+        elif self._config_entry.data.get(CONF_WEB_HOST) == "auto.amap.com":
+            SENSORSLIST = [
+                {"value": KEY_PARKING_TIME, "label": "parkingtime"},
+                {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
+                {"value": KEY_SPEED, "label": "speed"},
+                {"value": KEY_ADDRESS, "label": "address"},
+                {"value": KEY_STATUS, "label": "status"},
+            ]
+            
+            SWITCHSLIST = []            
+            BUTTONSLIST = []
         else:
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
@@ -631,7 +679,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             step_id="user",            
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PASSWORD, default=self._config.get(CONF_PASSWORD)): cv.string,
+                    vol.Required(CONF_PASSWORD, default=PWD_NOT_CHANGED): cv.string,
                     vol.Optional(
                         CONF_DEVICE_IMEI, 
                         default=self._config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
