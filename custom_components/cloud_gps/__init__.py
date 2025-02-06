@@ -312,7 +312,7 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
     def get_tencent_geocoding(self, lat, lng, api_key, private_key):
         api_url = 'https://apis.map.qq.com/ws/geocoder/v1/'
         location = str("{:.6f}".format(lat))+','+str("{:.6f}".format(lng))
-        sk = ''
+        sig = ''
         if private_key:
             params = '/ws/geocoder/v1/?get_poi=1&key='+api_key+'&location='+location+'&output=json'
             sig = self.tencent_sk(params, private_key)
