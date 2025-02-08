@@ -156,7 +156,7 @@ class DataFetcher:
                     thislon = infodata["naviLocInfo"]["lon"]
                     
                     distance = self.get_distance(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
-                    
+                    status = "在线"
                     if distance > 10:
                         _LOGGER.debug("状态为运动: %s ,%s ,%s", varstinydict,thislat,thislon)
                         status = "运动"

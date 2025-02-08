@@ -130,7 +130,7 @@ class CloudGPSButtonEntity(ButtonEntity):
     @property
     def available(self):
         """Return the available."""
-        attr_available = False if self.coordinator.data[self._imei]["attrs"].get("onlinestatus") == "离线" else True
+        attr_available = True if (self.coordinator.data.get(self._imei, {}).get("attrs", {}).get("onlinestatus", "") == "在线" ) else False
         return attr_available
         
     @property
