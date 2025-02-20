@@ -181,23 +181,19 @@ class DataFetcher:
                 direction = data["direction"]
                 speed = data.get("speed",0)
                 gpssignal = data.get("gPSSignal", 0)
+                
+                onlinestatus = "在线"
+                status = "停车"
 
                 if data['acc'] == "1":
-                    acc = "点火"
+                    acc = "钥匙启动"
+                    status = "钥匙启动"
                 else:
-                    acc = "熄火"
-                    
-                if data.get("powerStatus") == "1":
-                    powerStatus = "已接通"
-                else:
-                    powerStatus = "已断开"                    
-                                  
+                    acc = "钥匙关闭"
+                                     
                 thislat = float(data["lat"])
                 thislon = float(data["lng"])
                 
-                status = "在线"
-                onlinestatus = "在线"
-        
                 if data["status"] == "STATIC":
                     runorstop = "静止"
                     speed = 0
@@ -208,9 +204,11 @@ class DataFetcher:
                     speed = float(data.get("speed",0))
                     parkingtime = ""
                     statustime = data["statusStr"]
+                    status = "行驶"
                 elif data["status"] == "OFFLINE":
                     runorstop = "离线"
                     onlinestatus = "离线"
+                    status = "离线"
                     speed = 0
                     parkingtime = data.get("statusAbstract")
                     statustime = data["statusStr"]
@@ -219,6 +217,12 @@ class DataFetcher:
                     speed = 0
                     parkingtime = ""
                     statustime = ""
+                    
+                if data.get("powerStatus") == "1":
+                    powerStatus = "已接通"
+                else:
+                    powerStatus = "已断开"
+                    status = "外电已断开"
 
                 voltage = "0" if data["voltage"]=="" else data["voltage"]
                 laststoptime = data["gpsTime"]             

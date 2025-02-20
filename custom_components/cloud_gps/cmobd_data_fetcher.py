@@ -158,22 +158,17 @@ class DataFetcher:
                 address = data.get("realLocation","")
                 battery = int(data.get("soc", 0))/10
                 
+                status = "停车"
+                
                 if data["vehicleStatus"] == "1":
-                    acc = "车辆点火"
+                    acc = "钥匙开启"
+                    status = "钥匙开启"
                 elif data["vehicleStatus"] == "0":
-                    acc = "车辆熄火"
+                    acc = "钥匙关闭"
                 else:
                     acc = "未知"
                     
-                if data["onlineStatus"] == "2":
-                    onlinestatus = "在线" 
-                elif data["onlineStatus"] == "1":
-                    onlinestatus = "待机"
-                else:
-                    onlinestatus = "离线"
-                
-                status = "外电已连接" if data["powerStatus"] == "0" else "外电已断开"
-                                  
+            
                 thislat = float(data["posLatitude"])
                 thislon = float(data["posLongitude"])   
                 
@@ -183,11 +178,23 @@ class DataFetcher:
                 else:
                     laststoptime = None
                     parkingtime = ""
-                
+
                 if speed == 0:
                     runorstop = "静止"
                 else:
                     runorstop = "运动"
+                    status = "行驶"
+                    
+                if data["onlineStatus"] == "2":
+                    onlinestatus = "在线" 
+                elif data["onlineStatus"] == "1":
+                    onlinestatus = "待机"
+                else:
+                    onlinestatus = "离线"
+                    status = "离线"
+  
+                if data["powerStatus"] != "0":
+                    status = "外电已断开"
                 
                 attrs = {
                     "speed":speed,

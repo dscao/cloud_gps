@@ -156,10 +156,10 @@ class DataFetcher:
                     thislon = infodata["naviLocInfo"]["lon"]
                     
                     distance = self.get_distance(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
-                    status = "在线"
+                    status = "停车"
                     if distance > 10:
                         _LOGGER.debug("状态为运动: %s ,%s ,%s", varstinydict,thislat,thislon)
-                        status = "运动"
+                        status = "行驶"
                         distancetime = (datetime.datetime.now() - self.lastgpstime).total_seconds()
                         if distancetime > 1 and distance < 10000:
                             varstinydict["speed_"+self.location_key] = round((distance / distancetime * 3.6), 1)
@@ -188,7 +188,6 @@ class DataFetcher:
                         status = "离线"
                     else:
                         onlinestatus = "未知"
-                        status = "未知"
                         
                     if onlinestatus == "离线" and (varstinydict["isonline_"+self.location_key] == "在线"):
                         varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -208,7 +207,7 @@ class DataFetcher:
                     if laststoptime != "" and runorstop ==  "stop":
                         parkingtime=self.time_diff(int(time.mktime(time.strptime(laststoptime, "%Y-%m-%d %H:%M:%S")))) 
                     else:
-                        parkingtime = "未知"
+                        parkingtime = ""
                     
                     attrs ={
                         "querytime": querytime,

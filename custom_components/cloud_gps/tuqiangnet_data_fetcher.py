@@ -177,16 +177,14 @@ class DataFetcher:
                 direction = data["direction"]
                 speed = float(data.get("speed",0))             
                 
+                status = "停车"
+                
                 if data['acc'] == "1":
-                    acc = "点火"
+                    acc = "钥匙开启"
+                    status = "钥匙开启"
                 else:
-                    acc = "熄火"
-                    
-                if data.get("oilState") == 1:
-                    powerStatus = "已接通"
-                else:
-                    powerStatus = "已断开"
-                    
+                    acc = "钥匙关闭"
+                     
                 thislat = float(data["latitude"])
                 thislon = float(data["longitude"])
                 voltage = data['extVol']
@@ -198,16 +196,21 @@ class DataFetcher:
                 else:
                     parkingtime = ""
                     runorstop = "运动"
+                    status = "行驶"
                 positionType = "GPS" if data["locType"] == "0" else "基站定位"
                 if data['status'] == "2":
-                    status = "在线"
                     onlinestatus = "在线"
                 elif data['status'] == "3":
-                    status = "在线"
                     onlinestatus = "在线"
                 else:
                     status = "离线"
                     onlinestatus = "离线"
+                    
+                if data.get("oilState") == 1:
+                    powerStatus = "已接通"
+                else:
+                    powerStatus = "已断开"
+                    status = "外电已断开"
                     
                 if self._lat_old != thislat or self._lon_old != thislon:
                     self.address[imei] = await self.hass.async_add_executor_job(self._get_device_address, thislat, thislon)
