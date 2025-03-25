@@ -33,8 +33,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-TUQIANG_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-TUQIANG123_API_HOST = "http://www.tuqiang123.com"   # http://www.tuqiangol.com 或者 http://www.tuqiang123.com
+TUQIANG_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
+TUQIANG123_API_HOST = "https://www.tuqiang123.com"   # http://www.tuqiangol.com 或者 http://www.tuqiang123.com
 
 class DataFetcher:
     """fetch the cloud gps data"""

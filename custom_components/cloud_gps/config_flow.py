@@ -43,7 +43,7 @@ from .const import (
 
 import voluptuous as vol
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 USER_AGENT_CMOBD = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.43(0x18002b2d) NetType/4G Language/zh_CN'
 USER_AGENT_NIU = 'manager/4.6.48 (android; IN2020 11);lang=zh-CN;clientIdentifier=Domestic;timezone=Asia/Shanghai;model=IN2020;deviceName=IN2020;ostype=android'
 USER_AGENT_GOODDRIVER = 'gooddriver/7.9.1 CFNetwork/1410.0.3 Darwin/22.6.0'
@@ -59,7 +59,7 @@ WEBHOST = {
     "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）"
 }
 
-API_HOST_TUQIANG123 = "http://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 http://www.tuqiang123.com
+API_HOST_TUQIANG123 = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com
 API_HOST_TUQIANGNET = "https://www.tuqiang.net"
 API_HOST_TOKEN_GOODDRIVER = "https://ssl.gooddriver.cn"  # "https://ssl.gooddriver.cn" 或者 "http://121.41.101.95:8080"
 API_URL_GOODDRIVER = "http://restcore.gooddriver.cn/API/Values/HudDeviceDetail/"
