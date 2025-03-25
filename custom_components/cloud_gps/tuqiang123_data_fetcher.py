@@ -458,4 +458,4 @@ class DataSwitch:
             }
             resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
             _LOGGER.debug("Requests remaining: %s", url)
-            _LOGGER.debug(resp)  
+            _LOGGER.debug(resp)
