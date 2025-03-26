@@ -140,14 +140,15 @@ class DataFetcher:
             try:
                 async with timeout(10): 
                     data =  await self.hass.async_add_executor_job(self._get_device_tracker, self.password, imei)
-            except ClientConnectorError as error:
-                _LOGGER.error("连接错误: %s", error)
-            except asyncio.TimeoutError:
-                _LOGGER.error("获取数据超时 (10秒)")
-            except Exception as e:
-                _LOGGER.error("未知错误: %s", repr(e))
-            finally:
-                _LOGGER.debug("最终数据结果: %s", data)
+            except (
+                ClientConnectorError
+            ) as error:
+                raise
+            
+            except Exception as error:
+                raise UpdateFailed(error)
+
+            _LOGGER.debug("result data: %s", data)
             
             if data.get("result") == 0:
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -157,22 +158,17 @@ class DataFetcher:
                 address = data.get("realLocation","")
                 battery = int(data.get("soc", 0))/10
                 
+                status = "停车"
+                
                 if data["vehicleStatus"] == "1":
-                    acc = "车辆点火"
+                    acc = "钥匙开启"
+                    status = "钥匙开启"
                 elif data["vehicleStatus"] == "0":
-                    acc = "车辆熄火"
+                    acc = "钥匙关闭"
                 else:
                     acc = "未知"
                     
-                if data["onlineStatus"] == "2":
-                    onlinestatus = "在线" 
-                elif data["onlineStatus"] == "1":
-                    onlinestatus = "待机"
-                else:
-                    onlinestatus = "离线"
-                
-                status = "外电已连接" if data["powerStatus"] == "0" else "外电已断开"
-                                  
+            
                 thislat = float(data["posLatitude"])
                 thislon = float(data["posLongitude"])   
                 
@@ -182,11 +178,23 @@ class DataFetcher:
                 else:
                     laststoptime = None
                     parkingtime = ""
-                
+
                 if speed == 0:
                     runorstop = "静止"
                 else:
                     runorstop = "运动"
+                    status = "行驶"
+                    
+                if data["onlineStatus"] == "2":
+                    onlinestatus = "在线" 
+                elif data["onlineStatus"] == "1":
+                    onlinestatus = "待机"
+                else:
+                    onlinestatus = "离线"
+                    status = "离线"
+  
+                if data["powerStatus"] != "0":
+                    status = "外电已断开"
                 
                 attrs = {
                     "speed":speed,

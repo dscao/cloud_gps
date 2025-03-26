@@ -34,7 +34,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 TUQIANG_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
-TUQIANG123_API_HOST = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com
+TUQIANG123_API_HOST = "https://www.tuqiang123.com"   # http://www.tuqiangol.com 或者 http://www.tuqiang123.com
 
 class DataFetcher:
     """fetch the cloud gps data"""
@@ -134,7 +134,7 @@ class DataFetcher:
         
     async def get_data(self): 
     
-        _LOGGER.debug("tuqiang123 imei: %s", self.device_imei)
+        _LOGGER.debug(self.device_imei)
         if self.userid is None or self.usertype is None:
             await self.hass.async_add_executor_job(self._login, self.username, self.password)
 
@@ -146,14 +146,12 @@ class DataFetcher:
                 try:
                     async with timeout(10): 
                         infodata =  await self.hass.async_add_executor_job(self._get_device_info, imei)
-                except ClientConnectorError as error:
-                    _LOGGER.error("连接错误: %s", error)
-                except asyncio.TimeoutError:
-                    _LOGGER.error("获取数据超时 (10秒)")
-                except Exception as e:
-                    _LOGGER.error("未知错误: %s", repr(e))
-                finally:
-                    _LOGGER.debug("最终数据结果: %s", infodata)
+                except (
+                    ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result infodata: %s", infodata)
                 
                 if infodata:
                     self.deviceinfo[imei] =infodata
@@ -183,23 +181,19 @@ class DataFetcher:
                 direction = data["direction"]
                 speed = data.get("speed",0)
                 gpssignal = data.get("gPSSignal", 0)
+                
+                onlinestatus = "在线"
+                status = "停车"
 
                 if data['acc'] == "1":
-                    acc = "点火"
+                    acc = "钥匙启动"
+                    status = "钥匙启动"
                 else:
-                    acc = "熄火"
-                    
-                if data.get("powerStatus") == "1":
-                    powerStatus = "已接通"
-                else:
-                    powerStatus = "已断开"                    
-                                  
+                    acc = "钥匙关闭"
+                                     
                 thislat = float(data["lat"])
                 thislon = float(data["lng"])
                 
-                status = "在线"
-                onlinestatus = "在线"
-        
                 if data["status"] == "STATIC":
                     runorstop = "静止"
                     speed = 0
@@ -210,9 +204,11 @@ class DataFetcher:
                     speed = float(data.get("speed",0))
                     parkingtime = ""
                     statustime = data["statusStr"]
+                    status = "行驶"
                 elif data["status"] == "OFFLINE":
                     runorstop = "离线"
                     onlinestatus = "离线"
+                    status = "离线"
                     speed = 0
                     parkingtime = data.get("statusAbstract")
                     statustime = data["statusStr"]
@@ -221,6 +217,12 @@ class DataFetcher:
                     speed = 0
                     parkingtime = ""
                     statustime = ""
+                    
+                if data.get("powerStatus") == "1":
+                    powerStatus = "已接通"
+                else:
+                    powerStatus = "已断开"
+                    status = "外电已断开"
 
                 voltage = "0" if data["voltage"]=="" else data["voltage"]
                 laststoptime = data["gpsTime"]             
@@ -456,4 +458,4 @@ class DataSwitch:
             }
             resp = await self.hass.async_add_executor_job(self._do_action, url, json_body)
             _LOGGER.debug("Requests remaining: %s", url)
-            _LOGGER.debug(resp)  
+            _LOGGER.debug(resp)

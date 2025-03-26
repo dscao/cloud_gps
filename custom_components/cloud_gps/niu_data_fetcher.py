@@ -205,14 +205,12 @@ class DataFetcher:
                 try:
                     async with timeout(10): 
                         infodata =  await self.hass.async_add_executor_job(self.post_niu_info, imei)
-                except ClientConnectorError as error:
-                    _LOGGER.error("连接错误: %s", error)
-                except asyncio.TimeoutError:
-                    _LOGGER.error("获取数据超时 (10秒)")
-                except Exception as e:
-                    _LOGGER.error("未知错误: %s", repr(e))
-                finally:
-                    _LOGGER.debug("最终数据结果: %s", infodata)
+                except (
+                    ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result niu infodata: %s", infodata)
                 
                 if infodata:
                     self.deviceinfo[imei] =infodata
@@ -302,20 +300,17 @@ class DataFetcher:
                 course = ""
                 speed = float(self.motodata[imei]["CurrentSpeed"])
                 _LOGGER.debug("speed: %s", speed)
+                
+                status = "停车"
+                
                 if self.motodata[imei]["IsLocked"] == 1:
                     acc = "已锁车"
                 elif data["HD_STATE"] == 0:
                     acc = "已开锁"
+                    status = "钥匙开启"
                 else:
                     acc = "未知"
-                    
-                if self.motodata[imei]["ScooterConnected"] == 1:
-                    status = "在线"
-                elif data["HD_STATE"] == 0:
-                    status = "离线"
-                else:
-                    status = "未知"
-                                  
+    
                 thislat = float(self.motodata[imei]["Latitude"])
                 thislon = float(self.motodata[imei]["Longitude"])              
                 laststoptime = self.motodata[imei]["TimeLeft"]
@@ -325,6 +320,15 @@ class DataFetcher:
                     runorstop = "静止"
                 else:
                     runorstop = "运动"
+                    status = "行驶"
+                    
+                if self.motodata[imei]["ScooterConnected"] == 1:
+                    onlinestatus = "在线"
+                elif data["HD_STATE"] == 0:
+                    onlinestatus = "离线"
+                    status = "离线"
+                else:
+                    onlinestatusstatus = "未知"
                     
                 attrs = {
                     "speed":speed,
@@ -334,6 +338,7 @@ class DataFetcher:
                     "last_update":updatetime,
                     "acc":acc,
                     "runorstop":runorstop,
+                    "onlinestatus", onlinestatus,
                     "parkingtime":parkingtime
                 }
                 

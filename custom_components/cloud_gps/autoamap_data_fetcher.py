@@ -90,9 +90,7 @@ class DataFetcher:
     def _get_devices_info(self):        
         url = str.format(AUTOAMAP_API_HOST + self.password.split("||")[0])
         p_data = self.password.split("||")[2]
-        _LOGGER.debug("url: %s, p_data: %s, sessionid: %s", url, p_data, self.password.split("||")[1])
         resp = self.session_autoamap.post(url, data=p_data).json()["data"]["carLinkInfoList"]
-        _LOGGER.debug("AUTOAMAP carLinkInfoList: %s", resp)
         return resp
 
     
@@ -131,20 +129,18 @@ class DataFetcher:
         return int((bearing + 360) % 360)
         
 
-    async def get_data(self):
-        _LOGGER.debug("autoamap imei: %s", self.device_imei)
-        devicesinfodata = []
+        
+    async def get_data(self): 
+        
         try:
-            async with timeout(10):
-                devicesinfodata = await self.hass.async_add_executor_job(self._get_devices_info)
-        except ClientConnectorError as error:
-            _LOGGER.error("连接错误: %s", error)
-        except asyncio.TimeoutError:
-            _LOGGER.error("获取数据超时 (10秒)")
-        except Exception as e:
-            _LOGGER.error("未知错误: %s", repr(e))
-        finally:
-            _LOGGER.debug("最终数据结果: %s", devicesinfodata)
+            async with timeout(10): 
+                devicesinfodata =  await self.hass.async_add_executor_job(self._get_devices_info)
+        except (
+            ClientConnectorError
+        ) as error:
+            raise
+
+        _LOGGER.debug("result devicesinfodata: %s", devicesinfodata)
                 
         for imei in self.device_imei:
             _LOGGER.debug("get info imei: %s", imei)
@@ -160,10 +156,10 @@ class DataFetcher:
                     thislon = infodata["naviLocInfo"]["lon"]
                     
                     distance = self.get_distance(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
-                    status = "在线"
+                    status = "停车"
                     if distance > 10:
                         _LOGGER.debug("状态为运动: %s ,%s ,%s", varstinydict,thislat,thislon)
-                        status = "运动"
+                        status = "行驶"
                         distancetime = (datetime.datetime.now() - self.lastgpstime).total_seconds()
                         if distancetime > 1 and distance < 10000:
                             varstinydict["speed_"+self.location_key] = round((distance / distancetime * 3.6), 1)
@@ -192,7 +188,6 @@ class DataFetcher:
                         status = "离线"
                     else:
                         onlinestatus = "未知"
-                        status = "未知"
                         
                     if onlinestatus == "离线" and (varstinydict["isonline_"+self.location_key] == "在线"):
                         varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -212,7 +207,7 @@ class DataFetcher:
                     if laststoptime != "" and runorstop ==  "stop":
                         parkingtime=self.time_diff(int(time.mktime(time.strptime(laststoptime, "%Y-%m-%d %H:%M:%S")))) 
                     else:
-                        parkingtime = "未知"
+                        parkingtime = ""
                     
                     attrs ={
                         "querytime": querytime,
