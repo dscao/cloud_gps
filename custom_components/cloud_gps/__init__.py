@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-2-6
+LastEditTime  : 2025-3-26
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -21,15 +21,14 @@ import requests
 import re
 import hashlib
 import urllib.parse
-
+import math
+from importlib import import_module
 from aiohttp.client_exceptions import ClientConnectorError
 from async_timeout import timeout
-
 from dateutil.relativedelta import relativedelta 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.sensor import PLATFORM_SCHEMA
-
 from requests import ReadTimeout, ConnectTimeout, HTTPError, Timeout, ConnectionError
 from datetime import timedelta
 import homeassistant.util.dt as dt_util
@@ -37,14 +36,12 @@ from homeassistant.components import zone
 from homeassistant.components.device_tracker import PLATFORM_SCHEMA
 from homeassistant.components.device_tracker.const import CONF_SCAN_INTERVAL
 from homeassistant.components.device_tracker.legacy import DeviceScanner
-
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.core_config import Config
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import slugify
 from homeassistant.helpers.event import track_utc_time_change
@@ -52,11 +49,8 @@ from homeassistant.util import slugify
 from homeassistant.util.location import distance
 from homeassistant.util.json import load_json
 from homeassistant.helpers.json import save_json
-
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09, bd09_to_gcj02, bd09_to_wgs84, wgs84_to_bd09
 
-import math
-    
 from homeassistant.const import (
     Platform,
     CONF_USERNAME,
@@ -85,11 +79,8 @@ from .const import (
     CONF_UPDATE_INTERVAL,
 )
 
-
-
-
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2025.1.28'
+__version__ = '2025.3.26'
 
 _LOGGER = logging.getLogger(__name__)
     
@@ -102,6 +93,17 @@ TACTICS_BAIDU = [0,1,2,3,4,5]
 TACTICS_GAODE = [0,13,4,2,1,5]
 TACTICS_QQ = ["LEAST_TIME","AVOID_HIGHWAY","REAL_TRAFFIC","LEAST_TIME","LEAST_FEE","HIGHROAD_FIRST"]
 
+# 平台与模块映射关系
+PLATFORM_MODULE_MAP = {
+    "gooddriver.cn": "gooddriver_data_fetcher",
+    "tuqiang123.com": "tuqiang123_data_fetcher",
+    "tuqiang.net": "tuqiangnet_data_fetcher",
+    "cmobd.com": "cmobd_data_fetcher",
+    "niu.com": "niu_data_fetcher",
+    "hellobike.com": "hellobike_data_fetcher",
+    "auto.amap.com": "autoamap_data_fetcher",
+}
+
    
 async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     """Set up configured cloud_gps."""
@@ -109,7 +111,7 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up cloud_gps as config entry."""
+    """Set up cloud_gps as config entry."""        
     username = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
     webhost = entry.data[CONF_WEB_HOST]
@@ -123,9 +125,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     private_key = entry.options.get(CONF_PRIVATE_KEY, "")
     location_key = entry.unique_id
     
+    # 异步导入模块
+    try:
+        module = await async_import_data_fetcher(hass, webhost)
+    except (ValueError, ImportError) as e:
+        raise ConfigEntryNotReady(str(e))
+    data_fetcher_class = module.DataFetcher
     _LOGGER.debug(device_imei)
-    coordinator = cloudDataUpdateCoordinator(
-        hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key
+    coordinator = CloudDataUpdateCoordinator(
+        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key
     )
     
     await coordinator.async_refresh()
@@ -167,11 +175,24 @@ async def update_listener(hass, entry):
     """Update listener."""
     await hass.config_entries.async_reload(entry.entry_id)
 
+async def async_import_data_fetcher(hass, webhost):
+    """异步导入数据获取模块"""
+    module_name = PLATFORM_MODULE_MAP.get(webhost)
+    if not module_name:
+        raise ValueError(f"Unsupported platform: {webhost}")
 
-class cloudDataUpdateCoordinator(DataUpdateCoordinator):
+    try:
+        return await hass.async_add_executor_job(
+            lambda: import_module(f".{module_name}", __package__)
+        )
+    except ImportError as e:
+        _LOGGER.error("模块导入失败: %s", e)
+        raise
+        
+class CloudDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching cloud data API."""
 
-    def __init__(self, hass, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key):
+    def __init__(self, hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key):
         """Initialize."""
         self._hass = hass
         update_interval = (
@@ -192,26 +213,7 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
         self._coords = {}
         self._coords_old = {}
         self._address = {}
-        
-        if webhost == "gooddriver.cn":
-            from .gooddriver_data_fetcher import DataFetcher
-        elif webhost == "tuqiang123.com":
-            from .tuqiang123_data_fetcher import DataFetcher
-        elif webhost == "tuqiang.net":
-            from .tuqiangnet_data_fetcher import DataFetcher
-        elif webhost == "cmobd.com":
-            from .cmobd_data_fetcher import DataFetcher
-        elif webhost == "niu.com":
-            from .niu_data_fetcher import DataFetcher
-        elif webhost == "hellobike.com":
-            from .hellobike_data_fetcher import DataFetcher
-        elif webhost == "auto.amap.com":
-            from .autoamap_data_fetcher import DataFetcher
-        else:
-            _LOGGER.error("配置的平台不支持，请删除集成条目重新配置！")
-            return
-        
-        self._fetcher = DataFetcher(hass, username, password, device_imei, location_key)
+        self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key)
       
 
     async def _async_update_data(self):
@@ -246,50 +248,54 @@ class cloudDataUpdateCoordinator(DataUpdateCoordinator):
             
             
     async def _get_address_frome_api(self, imei, addressapi, api_key, private_key):
-        try: 
-            if addressapi == "baidu" and api_key:
-                _LOGGER.debug("baidu:"+api_key)
-                addressdata = await self._hass.async_add_executor_job(self.get_baidu_geocoding, self._coords[imei][1], self._coords[imei][0], api_key, private_key)
-                if addressdata['status'] == 0:
-                    self._coords_old[imei] = self._coords[imei]
-                    return addressdata['result']['formatted_address'] + addressdata['result']['sematic_description']
+        try:
+            async with timeout(5):
+                if addressapi == "baidu" and api_key:
+                    _LOGGER.debug("baidu:"+api_key)
+                    addressdata = await self._hass.async_add_executor_job(self.get_baidu_geocoding, self._coords[imei][1], self._coords[imei][0], api_key, private_key)
+                    if addressdata['status'] == 0:
+                        self._coords_old[imei] = self._coords[imei]
+                        return addressdata['result']['formatted_address'] + addressdata['result']['sematic_description']
+                    else:
+                        return addressdata['message']                
+                elif addressapi == "gaode" and api_key:
+                    _LOGGER.debug("gaode:"+api_key)
+                    gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
+                    addressdata = await self._hass.async_add_executor_job(self.get_gaode_geocoding, gcjdata[1], gcjdata[0], api_key, private_key)
+                    if addressdata['status'] == "1":
+                        self._coords_old[imei] = self._coords[imei]
+                        return addressdata['regeocode']['formatted_address']
+                    else: 
+                        return addressdata['info']
+                    
+                elif addressapi == "tencent" and api_key:
+                    _LOGGER.debug("tencent:"+api_key)
+                    gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
+                    addressdata = await self._hass.async_add_executor_job(self.get_tencent_geocoding, gcjdata[1], gcjdata[0], api_key, private_key)
+                    if addressdata['status'] == 0:
+                        self._coords_old[imei] = self._coords[imei]
+                        return addressdata['result']['formatted_addresses']['recommend']
+                    else: 
+                        return addressdata['message']                
+                elif addressapi == "free":
+                    _LOGGER.debug("free")
+                    gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
+                    bddata = gcj02_to_bd09(gcjdata[0], gcjdata[1])
+                    addressdata = await self._hass.async_add_executor_job(self.get_free_geocoding, bddata[1], bddata[0])
+                    if addressdata['status'] == 'OK':
+                        self._coords_old[imei] = self._coords[imei]
+                        return addressdata['result']['formatted_address']
+                    else:
+                        return 'free接口返回错误'                
                 else:
-                    return addressdata['message']                
-            elif addressapi == "gaode" and api_key:
-                _LOGGER.debug("gaode:"+api_key)
-                gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
-                addressdata = await self._hass.async_add_executor_job(self.get_gaode_geocoding, gcjdata[1], gcjdata[0], api_key, private_key)
-                if addressdata['status'] == "1":
-                    self._coords_old[imei] = self._coords[imei]
-                    return addressdata['regeocode']['formatted_address']
-                else: 
-                    return addressdata['info']
-                
-            elif addressapi == "tencent" and api_key:
-                _LOGGER.debug("tencent:"+api_key)
-                gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
-                addressdata = await self._hass.async_add_executor_job(self.get_tencent_geocoding, gcjdata[1], gcjdata[0], api_key, private_key)
-                if addressdata['status'] == 0:
-                    self._coords_old[imei] = self._coords[imei]
-                    return addressdata['result']['formatted_addresses']['recommend']
-                else: 
-                    return addressdata['message']                
-            elif addressapi == "free":
-                _LOGGER.debug("free")
-                gcjdata = wgs84togcj02(self._coords[imei][0], self._coords[imei][1])
-                bddata = gcj02_to_bd09(gcjdata[0], gcjdata[1])
-                addressdata = await self._hass.async_add_executor_job(self.get_free_geocoding, bddata[1], bddata[0])
-                if addressdata['status'] == 'OK':
-                    self._coords_old[imei] = self._coords[imei]
-                    return addressdata['result']['formatted_address']
-                else:
-                    return 'free接口返回错误'                
-            else:
-                return ""            
-        except (
-            ClientConnectorError
-        ) as error:
-            raise UpdateFailed(error)
+                    return ""            
+        except ClientConnectorError as error:
+            return("连接错误: %s", error)
+        except asyncio.TimeoutError:
+            return("获取数据超时 (5秒)")
+        except Exception as e:
+            return("未知错误: %s", repr(e))
+
             
     def get_data(self, url):
         json_text = requests.get(url).content
