@@ -135,12 +135,14 @@ class DataFetcher:
         try:
             async with timeout(10): 
                 devicesinfodata =  await self.hass.async_add_executor_job(self._get_devices_info)
-        except (
-            ClientConnectorError
-        ) as error:
-            raise
-
-        _LOGGER.debug("result devicesinfodata: %s", devicesinfodata)
+        except ClientConnectorError as error:
+            _LOGGER.error("连接错误: %s", error)
+        except asyncio.TimeoutError:
+            _LOGGER.error("获取数据超时 (10秒)")
+        except Exception as e:
+            _LOGGER.error("未知错误: %s", repr(e))
+        finally:
+            _LOGGER.debug("最终数据结果: %s", devicesinfodata)
                 
         for imei in self.device_imei:
             _LOGGER.debug("get info imei: %s", imei)

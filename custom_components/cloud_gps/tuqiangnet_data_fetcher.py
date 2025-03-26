@@ -144,12 +144,15 @@ class DataFetcher:
                     async with timeout(10): 
                         infodata =  await self.hass.async_add_executor_job(self._get_device_info, imei)
                         
-                except (
-                    ClientConnectorError
-                ) as error:
-                    raise
+                except ClientConnectorError as error:
+                    _LOGGER.error("连接错误: %s", error)
+                except asyncio.TimeoutError:
+                    _LOGGER.error("获取数据超时 (10秒)")
+                except Exception as e:
+                    _LOGGER.error("未知错误: %s", repr(e))
+                finally:
+                    _LOGGER.debug("最终数据结果: %s", infodata)
 
-                _LOGGER.debug("result infodata: %s", infodata)
                 
                 if infodata:
                     self.deviceinfo[imei] =infodata
@@ -160,16 +163,15 @@ class DataFetcher:
             try:
                 async with timeout(10): 
                     data =  await self.hass.async_add_executor_job(self._get_device_tracker, imei)                    
-            except (
-                ClientConnectorError
-            ) as error:
-                raise
-                           
-            except Exception as error:
+            except ClientConnectorError as error:
+                _LOGGER.error("连接错误: %s", error)
+            except asyncio.TimeoutError:
+                _LOGGER.error("获取数据超时 (10秒)")
+            except Exception as e:
                 await self.hass.async_add_executor_job(self._login, self.username, self.password)                
-                raise UpdateFailed(error)
-
-            _LOGGER.debug("result data: %s", data)
+                raise UpdateFailed(e)
+            finally:
+                _LOGGER.debug("最终数据结果: %s", data)
             
             if data:
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
