@@ -549,7 +549,8 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry):
         """Initialize cloud options flow."""
-        self._config_entry = config_entry
+        #self._config_entry = config_entry
+        self._conf_app_id: str | None = None
         self._config = dict(config_entry.data)
 
     async def async_step_init(self, user_input=None):
@@ -577,22 +578,20 @@ class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
         if user_input is not None:
-            #return self.async_create_entry(title="", data=user_input)
-            #self._config.update(user_input)
             updated_user_input = self.update_password_from_user_input(self._config.get("password"), user_input)
             self._config.update(updated_user_input)
             self.hass.config_entries.async_update_entry(
-                self._config_entry,
+                self.config_entry,
                 data=self._config
             )
-            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+            await self.hass.config_entries.async_reload(self._config_entry_id)
             return self.async_create_entry(title="", data=self._config)
             
         listoptions = []  
-        for deviceconfig in self._config_entry.data.get(CONF_DEVICES,[]):
+        for deviceconfig in self.config_entry.data.get(CONF_DEVICES,[]):
             listoptions.append({"value": deviceconfig, "label": deviceconfig})
         
-        if self._config_entry.data.get(CONF_WEB_HOST) == "tuqiang123.com":
+        if self.config_entry.data.get(CONF_WEB_HOST) == "tuqiang123.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -607,7 +606,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             BUTTONSLIST = [
                 {"value": "nowtrack", "label": "nowtrack"}
             ]
-        elif self._config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "hellobike.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -625,7 +624,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             BUTTONSLIST = [
                 {"value": "bell", "label": "bell"}
             ]
-        elif self._config_entry.data.get(CONF_WEB_HOST) == "gooddriver.cn":
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "gooddriver.cn":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -638,7 +637,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
-        elif self._config_entry.data.get(CONF_WEB_HOST) == "cmobd.com":
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "cmobd.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -650,7 +649,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
-        elif self._config_entry.data.get(CONF_WEB_HOST) == "auto.amap.com":
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "auto.amap.com":
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
@@ -682,7 +681,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_PASSWORD, default=PWD_NOT_CHANGED): cv.string,
                     vol.Optional(
                         CONF_DEVICE_IMEI, 
-                        default=self._config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
+                        default=self.config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
                         SelectSelectorConfig(
                             options=listoptions,
                             multiple=True,translation_key=CONF_DEVICE_IMEI
@@ -690,11 +689,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_UPDATE_INTERVAL,
-                        default=self._config_entry.options.get(CONF_UPDATE_INTERVAL, 60),
+                        default=self.config_entry.options.get(CONF_UPDATE_INTERVAL, 60),
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)), 
                     vol.Optional(
                         CONF_GPS_CONVER,
-                        default=self._config_entry.options.get(CONF_GPS_CONVER,"wgs84")
+                        default=self.config_entry.options.get(CONF_GPS_CONVER,"wgs84")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -707,11 +706,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_ATTR_SHOW,
-                        default=self._config_entry.options.get(CONF_ATTR_SHOW, True),
+                        default=self.config_entry.options.get(CONF_ATTR_SHOW, True),
                     ): bool,
                     vol.Optional(
                         CONF_WITH_MAP_CARD, 
-                        default=self._config_entry.options.get(CONF_WITH_MAP_CARD,"none")
+                        default=self.config_entry.options.get(CONF_WITH_MAP_CARD,"none")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -724,7 +723,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_SENSORS, 
-                        default=self._config_entry.options.get(CONF_SENSORS,[])
+                        default=self.config_entry.options.get(CONF_SENSORS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=SENSORSLIST,
@@ -733,7 +732,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_SWITCHS, 
-                        default=self._config_entry.options.get(CONF_SWITCHS,[])
+                        default=self.config_entry.options.get(CONF_SWITCHS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=SWITCHSLIST,
@@ -742,7 +741,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_BUTTONS, 
-                        default=self._config_entry.options.get(CONF_BUTTONS,[])
+                        default=self.config_entry.options.get(CONF_BUTTONS,[])
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=BUTTONSLIST,
@@ -751,11 +750,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_UPDATE_ADDRESSDISTANCE,
-                        default=self._config_entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50),
+                        default=self.config_entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50),
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=10000)),
                     vol.Optional(
                         CONF_ADDRESSAPI, 
-                        default=self._config_entry.options.get(CONF_ADDRESSAPI,"none")
+                        default=self.config_entry.options.get(CONF_ADDRESSAPI,"none")
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[
@@ -770,11 +769,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         CONF_ADDRESSAPI_KEY, 
-                        default=self._config_entry.options.get(CONF_ADDRESSAPI_KEY,"")
+                        default=self.config_entry.options.get(CONF_ADDRESSAPI_KEY,"")
                     ): str, 
                     vol.Optional(
                         CONF_PRIVATE_KEY, 
-                        default=self._config_entry.options.get(CONF_PRIVATE_KEY,"")
+                        default=self.config_entry.options.get(CONF_PRIVATE_KEY,"")
                     ): str,
                 }
             ),
