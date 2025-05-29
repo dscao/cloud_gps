@@ -37,5 +37,11 @@ macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-hay
 ![14](https://github.com/dscao/cloud_gps/assets/16587914/f58a39f1-e5a0-4be0-8f79-baa612761d53)
 
 
-![macless-haystack](https://github.com/user-attachments/assets/3531ab31-174e-457a-ba91-8b0f43d2afe5)
+![PixPin_2025-05-29_15-04-33](https://github.com/user-attachments/assets/465cf494-c24e-4dac-a7cb-b85e59337fd1)
+
+
+![PixPin_2025-05-29_15-06-23](https://github.com/user-attachments/assets/3ec7d828-84b1-4f2a-8105-9358fa9846b5)
+
+
+![PixPin_2025-05-29_15-07-31](https://github.com/user-attachments/assets/0e7d46ef-46ef-4f71-9ebb-a06f92472d6b)
 
