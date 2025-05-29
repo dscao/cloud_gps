@@ -1,5 +1,5 @@
 # cloud_gps
-GPS定位平台数据接入homeassistant，包含“途强在线“、“途强物联”、“优驾盒子联网版”、“高德机车版”、“中移行车卫士”、"哈啰智能芯"等, 后续可能会加入等更多设备支持。
+GPS定位平台数据接入homeassistant，包含“途强在线“、“途强物联”、“优驾盒子联网版”、“高德机车版”、“中移行车卫士”、"macless-haystack"等, 后续可能会加入等更多设备支持。
 
 # 注意：
 近期发现2G设备网络很差，很多区域都没有信号了。现在全部重新购买4G或5G设备了。
@@ -17,8 +17,9 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 添加集成功后，第一步需要进入选项启用设备，才会出现实现。如果没有设备，说明账号中没有可支持的gps设备。
 
-哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike
+哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike （现在好像没办法抓包了）
 
+macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack  
 
 中移行车卫士参数从小程序中抓包。
 
@@ -35,4 +36,6 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 ![14](https://github.com/dscao/cloud_gps/assets/16587914/f58a39f1-e5a0-4be0-8f79-baa612761d53)
 
+
+![macless-haystack](https://github.com/user-attachments/assets/3531ab31-174e-457a-ba91-8b0f43d2afe5)
 
