@@ -12,6 +12,7 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 重启ha后，强制刷新浏览器一次，进入集成，搜索： cloud_gps或云平台GPS ，按提示配置即可。
 
+搭配 https://github.com/dscao/gaode_maps 可比较简易实现显示国内地图和轨迹
 ## 说明
 对于平台未提供地址信息的，可以使用api调用百度、高德或腾讯地图的接口来显示具体地址信息，可按喜好选用。
 
