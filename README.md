@@ -13,14 +13,16 @@ hacs安装： https://github.com/dscao/cloud_gps
 重启ha后，强制刷新浏览器一次，进入集成，搜索： cloud_gps或云平台GPS ，按提示配置即可。
 
 搭配 https://github.com/dscao/gaode_maps 可比较简易实现显示国内地图和轨迹
+
 ## 说明
+
 对于平台未提供地址信息的，可以使用api调用百度、高德或腾讯地图的接口来显示具体地址信息，可按喜好选用。
 
 添加集成功后，第一步需要进入选项启用设备，才会出现实现。如果没有设备，说明账号中没有可支持的gps设备。
 
 哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike （现在好像没办法抓包了）
 
-macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack  
+macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack （此功暂未发布，等测试一段时间） 
 
 中移行车卫士参数从小程序中抓包。
 
