@@ -22,7 +22,7 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike （现在好像没办法抓包了）
 
-macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack （此功暂未发布，等测试一段时间） 
+macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack （此功能暂未发布，等测试一段时间） 
 
 中移行车卫士参数从小程序中抓包。
 
