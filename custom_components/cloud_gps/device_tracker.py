@@ -10,7 +10,6 @@ import urllib.parse
 from aiohttp.client_exceptions import ClientConnectorError
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.helpers.device_registry import DeviceEntryType
-
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09
 
 from homeassistant.const import (
@@ -59,10 +58,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 
 class CloudGPSEntity(TrackerEntity):
-    """Representation of a tracker condition."""
+    """Representation of a tracker condition with state restoration."""
     _attr_has_entity_name = True
     _attr_name = None
     _attr_translation_key = "cloud_device_tracker"
+    
     def __init__(self, hass, webhost, imei, attr_show, with_map_card, coordinator):
         self._hass = hass
         self._imei = imei
@@ -70,9 +70,17 @@ class CloudGPSEntity(TrackerEntity):
         self.coordinator = coordinator   
         self._attr_show = attr_show
         self._with_map_card = with_map_card
+        self._last_state = {
+            "longitude": None,
+            "latitude": None,
+            "location_accuracy": 0,
+            "source_type": "gps"
+        }
         self._attrs = {}
-        self._coords = [self.coordinator.data[self._imei]["thislon"], self.coordinator.data[self._imei]["thislat"]]
-
+        
+        # 立即尝试加载状态
+        self._load_state()
+        
     @property
     def unique_id(self):
         """Return a unique_id for this entity."""
@@ -104,59 +112,78 @@ class CloudGPSEntity(TrackerEntity):
     def icon(self):
         """Return the icon."""
         return "mdi:car"
-        
-    @property
-    def source_type(self):
-        return "gps"
-
-    @property
-    def latitude(self):                
-        return self._coords[1]
 
     @property
     def longitude(self):
-        return self._coords[0]
+        return self._last_state['longitude']
+    
+    @property
+    def latitude(self):                
+        return self._last_state['latitude']
         
     @property
     def location_accuracy(self):
-        return 0        
+        return self._last_state['location_accuracy']
+    
+    @property
+    def source_type(self):
+        return self._last_state['source_type']
 
     @property
     def state_attributes(self): 
-        attrs = super(CloudGPSEntity, self).state_attributes
-        #data = self.trackerdata.get("result")
-        if self.coordinator.data[self._imei]:             
-            attrs["status"] = self.coordinator.data[self._imei]["status"]
-            if attrs.get("imei"):
-                attrs["imei"] = self.coordinator.data[self._imei]["imei"]
+        attrs = super().state_attributes
+        attrs.update(self._attrs)
+        return attrs
+
+
+    async def async_added_to_hass(self):
+        """Connect to dispatcher."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+
+    async def async_update(self):
+        """Update cloud entity."""
+        _LOGGER.debug("刷新device_tracker数据: %s %s %s", datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.coordinator.data.get(self._imei) )
+        #await self.coordinator.async_request_refresh()
+        self._load_state()
+    
+    def _load_state(self):
+        data = self.coordinator.data.get(self._imei)
+        if data:
+            
+            # 更新位置信息
+            self._last_state["longitude"] = data.get("thislon")
+            self._last_state["latitude"] = data.get("thislat")
+            self._last_state["location_accuracy"] = int(data.get("accuracy", 0))
+            self._last_state["source_type"] = data.get("source_type", "gps")
+            # 更新属性
+            attrs = {}
+            attrs["status"] = data.get("status", "unknown")
+
+            if data.get("imei"):
+                attrs["imei"] = data["imei"]
             if self._with_map_card != "none" and self._with_map_card != None:
                 attrs["custom_ui_more_info"] = self._with_map_card
             if self._attr_show == True:
-                attrslist = self.coordinator.data[self._imei]["attrs"]
+                attrslist = data["attrs"]
                 for key, value in attrslist.items():
                     attrs[key] = value
-                if self.coordinator.data[self._imei]["deviceinfo"].get("expiration"):
-                    attrs["expiration"] = self.coordinator.data[self._imei]["deviceinfo"]["expiration"]
+                if data["deviceinfo"].get("expiration"):
+                    attrs["expiration"] = data["deviceinfo"]["expiration"]
                 
-                gcjdata = wgs84togcj02(self.coordinator.data[self._imei]["thislon"], self.coordinator.data[self._imei]["thislat"])
+                gcjdata = wgs84togcj02(data["thislon"], data["thislat"])
                 attrs[CONF_MAP_GCJ_LAT] = gcjdata[1]
                 attrs[CONF_MAP_GCJ_LNG] = gcjdata[0]
                 bddata = gcj02_to_bd09(gcjdata[0], gcjdata[1])
                 attrs[CONF_MAP_BD_LAT] = bddata[1]
                 attrs[CONF_MAP_BD_LNG] = bddata[0]
-        return attrs
+                
+            self._attrs = attrs
+            
+        else:
+            # 保持最后的有效状态
+            _LOGGER.warning("Failed to obtain new coordinates, using last known state: %s", self._last_state)
 
-
-    async def async_added_to_hass(self):
-        """Connect to dispatcher listening for entity data notifications."""
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self.async_write_ha_state)
-        )
-
-    async def async_update(self):
-        """Update cloud entity."""
-        _LOGGER.debug("刷新device_tracker数据: %s %s", datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") )
-        #await self.coordinator.async_request_refresh()
-        if self.coordinator.data.get(self._imei):
-            self._coords = [self.coordinator.data[self._imei]["thislon"], self.coordinator.data[self._imei]["thislat"]]
-
+                

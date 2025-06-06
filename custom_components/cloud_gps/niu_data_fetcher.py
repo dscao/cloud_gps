@@ -293,8 +293,7 @@ class DataFetcher:
                     "Longitude": motodata["data"]["postion"]["lng"],
                     "Latitude": motodata["data"]["postion"]["lat"],
                 }
-                
-            self.trackerdata[imei] = {}                   
+
             
             if self.motodata[imei]:
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

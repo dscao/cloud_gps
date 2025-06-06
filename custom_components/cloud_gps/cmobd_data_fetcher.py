@@ -135,7 +135,6 @@ class DataFetcher:
 
         for imei in self.device_imei:
             _LOGGER.debug("Requests vehicleID: %s", imei)
-            self.trackerdata[imei] = {}
                                
             try:
                 async with timeout(10): 

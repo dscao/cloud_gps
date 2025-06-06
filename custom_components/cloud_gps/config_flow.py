@@ -6,6 +6,7 @@ import time, datetime
 import requests
 import re
 import hashlib
+import base64
 import homeassistant.helpers.config_validation as cv
 from homeassistant.const import CONF_NAME, CONF_USERNAME, CONF_PASSWORD, CONF_CLIENT_ID
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
@@ -28,12 +29,14 @@ from .const import (
     KEY_QUERYTIME,
     KEY_PARKING_TIME,
     KEY_LASTSTOPTIME,
+    KEY_LASTSEEN,
     KEY_ADDRESS,
     KEY_SPEED,
     KEY_TOTALKM,
     KEY_STATUS,
     KEY_ACC,
     KEY_BATTERY,
+    KEY_BATTERY_STATUS,
     CONF_UPDATE_ADDRESSDISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
@@ -56,7 +59,8 @@ WEBHOST = {
     "niu.com": "小牛电动车（暂未调试）",    
     "cmobd.com": "中移行车卫士（*密码填写token）",    
     "hellobike.com": "哈啰智能芯（*密码填写token）",
-    "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）"
+    "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
+    "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）"
 }
 
 API_HOST_TUQIANG123 = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com
@@ -254,6 +258,23 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         resp = self.session.post(url, data=p_data).json()
         return resp
         
+    def _test_macless_haystack(self, url, username, password):
+        auth_header = f"Basic {self.encode_username_password_sha1(username, password).decode('utf-8')}"
+        headers= {"authorization": auth_header}
+        resp = requests.get(url, headers=headers)
+        return resp
+        
+    def encode_username_password(self, sername, password):
+        credentials = f"{username}:{password}"
+        encoded_credentials = base64.b64encode(credentials.encode('utf-8'))
+        return encoded_credentials
+
+    def encode_username_password_sha1(self, username, password):
+        credentials = f"{username}:{password}"
+        hashed_credentials = hashlib.sha1(credentials.encode('utf-8')).digest()
+        encoded_credentials = base64.b64encode(hashed_credentials)
+        return encoded_credentials
+            
     async def async_step_user(self, user_input={}):
         self._errors = {}
         if user_input is not None:
@@ -518,6 +539,42 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+            elif webhost=="macless_haystack":
+                if username.find("||") == -1:
+                    username = username + "||0||0"
+                status = await self.hass.async_add_executor_job(self._test_macless_haystack, username.split("||")[0], username.split("||")[1], username.split("||")[2])
+                _LOGGER.debug(status)
+                
+                if status.text != "Nothing to see here.":
+                    self._errors["base"] = "服务器参数不正确，返回的值提示服务器不正确。"
+                    return await self._show_config_form(user_input)
+                
+                try:
+                    json_data = json.loads(password) 
+                except (SyntaxError, TypeError, KeyError) as e:
+                    _LOGGER.error("填写的json数据解析错误: %s", repr(e))
+                    return
+                
+                
+                if isinstance(json_data, list):
+                    for deviceslist in json_data:
+                        devices.append(str(deviceslist["id"]))
+
+                    await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_NAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
+                    self._abort_if_unique_id_configured()
+                    
+                    config_data[CONF_USERNAME] = username
+                    config_data[CONF_PASSWORD] = password
+                    config_data[CONF_DEVICES] = devices
+                    config_data[CONF_WEB_HOST] = webhost
+                    
+                    _LOGGER.debug(devices)
+                    
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME], data=config_data
+                    )
+                else:
+                    self._errors["base"] = "communication"
             else:
                 self._errors["base"] = "未选择有效平台"
 
@@ -660,6 +717,16 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "macless_haystack":
+            SENSORSLIST = [
+                {"value": KEY_LASTSEEN, "label": "lastseen"},
+                {"value": KEY_ADDRESS, "label": "address"},
+                {"value": KEY_STATUS, "label": "status"},
+                {"value": KEY_BATTERY_STATUS, "label": "battery_status"},
+            ]
+            
+            SWITCHSLIST = []            
+            BUTTONSLIST = []
         else:
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
@@ -759,7 +826,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                         SelectSelectorConfig(
                             options=[
                                 {"value": "none", "label": "none"},
-                                {"value": "free", "label": "free"},
+                                #{"value": "free", "label": "free"}, #百度免api接口已关闭
                                 {"value": "gaode", "label": "gaode"},
                                 {"value": "baidu", "label": "baidu"},
                                 {"value": "tencent", "label": "tencent"}

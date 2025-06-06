@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2025.1.29"
+VERSION = "2025.5.29"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
@@ -61,10 +61,11 @@ KEY_ADDRESS = "address"
 KEY_QUERYTIME = "querytime"
 KEY_PARKING_TIME = "parkingtime"
 KEY_LASTSTOPTIME = "laststoptime"
+KEY_LASTSEEN = "lastseen"
 KEY_SPEED = "speed"
 KEY_TOTALKM = "totalkm"
 KEY_STATUS = "status"
 KEY_ACC = "acc"
 KEY_BATTERY = "powbattery"
-
+KEY_BATTERY_STATUS = "battery_status"
 

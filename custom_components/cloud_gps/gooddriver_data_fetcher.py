@@ -126,8 +126,7 @@ class DataFetcher:
 
         for imei in self.device_imei:
             _LOGGER.debug("Requests imei: %s", imei)
-            self.trackerdata[imei] = {}
-                               
+
             try:
                 async with timeout(10): 
                     data =  await self.hass.async_add_executor_job(self._get_device_tracker, imei)

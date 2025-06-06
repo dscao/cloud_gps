@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-3-26
+LastEditTime  : 2025-6-5
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -30,7 +30,6 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from requests import ReadTimeout, ConnectTimeout, HTTPError, Timeout, ConnectionError
-from datetime import timedelta
 import homeassistant.util.dt as dt_util
 from homeassistant.components import zone
 from homeassistant.components.device_tracker import PLATFORM_SCHEMA
@@ -80,7 +79,7 @@ from .const import (
 )
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2025.3.26'
+__version__ = '2025.6.5'
 
 _LOGGER = logging.getLogger(__name__)
     
@@ -102,6 +101,7 @@ PLATFORM_MODULE_MAP = {
     "niu.com": "niu_data_fetcher",
     "hellobike.com": "hellobike_data_fetcher",
     "auto.amap.com": "autoamap_data_fetcher",
+    "macless_haystack": "macless_haystack_data_fetcher",
 }
 
    
@@ -188,6 +188,7 @@ async def async_import_data_fetcher(hass, webhost):
     except ImportError as e:
         _LOGGER.error("模块导入失败: %s", e)
         raise
+
         
 class CloudDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching cloud data API."""
@@ -204,6 +205,7 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         
         self._gps_conver = gps_conver
         self.device_imei = device_imei
+        self._location_key = location_key
 
         self._address_distance = address_distance
         self._addressapi = addressapi
@@ -217,36 +219,46 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
       
 
     async def _async_update_data(self):
-        """Update data via library."""        
+        """Update data via library."""  
         try:
-            async with timeout(10):
+            async with timeout(20):
                 data = await self._fetcher.get_data()
-                _LOGGER.debug("update_data: %s", data)                
-                _LOGGER.debug("gps_conver: %s", self._gps_conver)
-                if self._gps_conver == "gcj02":
+                _LOGGER.debug("%s update_data: %s", self.device_imei, data)                
+                _LOGGER.debug("%s gps_conver: %s", self.device_imei, self._gps_conver)
+                if data:
+                    if self._gps_conver == "gcj02":
+                        for imei in self.device_imei:
+                            data[imei]["thislon"], data[imei]["thislat"] = gcj02towgs84(data[imei]["thislon"], data[imei]["thislat"])
+                    if self._gps_conver == "bd09":
+                        for imei in self.device_imei:
+                            data[imei]["thislon"], data[imei]["thislat"] = bd09_to_wgs84(data[imei]["thislon"], data[imei]["thislat"])
                     for imei in self.device_imei:
-                        data[imei]["thislon"], data[imei]["thislat"] = gcj02towgs84(data[imei]["thislon"], data[imei]["thislat"])
-                if self._gps_conver == "bd09":
-                    for imei in self.device_imei:
-                        data[imei]["thislon"], data[imei]["thislat"] = bd09_to_wgs84(data[imei]["thislon"], data[imei]["thislat"])
-                for imei in self.device_imei:        
-                    self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
-                    if not self._coords_old.get(imei):
-                        self._coords_old[imei] = [0, 0]
-                        
-                if self._addressapi != "none" and self._addressapi != None:
-                    for imei in self.device_imei: 
-                        distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
-                        if distance > self._address_distance:
-                            self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
-                            _LOGGER.debug("api_get_address: %s", self._address.get(imei))
-                        data[imei]["attrs"]["address"] = self._address.get(imei)
-                self.data = data
+                        self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
+                        _LOGGER.debug("self._coords[%s]: %s", imei, self._coords[imei])
+                        if not self._coords_old.get(imei):
+                            self._coords_old[imei] = [0, 0]
+                            
+                    if self._addressapi != "none" and self._addressapi != None:
+                        for imei in self.device_imei: 
+                            distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
+                            if distance > self._address_distance:
+                                self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
+                                _LOGGER.debug("api_get_address: %s", self._address.get(imei))
+                            data[imei]["attrs"]["address"] = self._address.get(imei)
+                    # 保存新数据
+                    self.data = data
+
+                            
+                elif not data:
+                    _LOGGER.error("%s No data available from API", self.device_imei)
+
         except Exception as error:
-            raise error
+            _LOGGER.error("%s Error updating data: %s", self.device_imei, error)
+            
         return self.data
-            
-            
+ 
+        
+        
     async def _get_address_frome_api(self, imei, addressapi, api_key, private_key):
         try:
             async with timeout(5):

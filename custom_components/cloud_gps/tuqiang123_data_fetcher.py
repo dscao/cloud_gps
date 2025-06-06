@@ -140,9 +140,8 @@ class DataFetcher:
 
         for imei in self.device_imei:
             _LOGGER.debug("Requests imei: %s", imei)
-            self.trackerdata[imei] = {}
             if not self.deviceinfo.get(imei):
-                self.deviceinfo[imei] = {}
+
                 try:
                     async with timeout(10): 
                         infodata =  await self.hass.async_add_executor_job(self._get_device_info, imei)
@@ -158,10 +157,11 @@ class DataFetcher:
                     self.deviceinfo[imei]["device_model"] = "途强在线GPS"
                     self.deviceinfo[imei]["sw_version"] = infodata["mcType"]
                     self.deviceinfo[imei]["expiration"] = infodata["expiration"]
-                    
+            data = None        
             try:
                 async with timeout(10): 
                     data =  await self.hass.async_add_executor_job(self._get_device_tracker, imei)
+                    _LOGGER.debug("最终数据结果: %s", data)
             except ClientConnectorError as error:
                 _LOGGER.error("连接错误: %s", error)
             except asyncio.TimeoutError:
@@ -169,8 +169,7 @@ class DataFetcher:
             except Exception as e:
                 await self.hass.async_add_executor_job(self._login, self.username, self.password)
                 raise UpdateFailed(e)
-            finally:
-                _LOGGER.debug("最终数据结果: %s", data)
+ 
             
             if data:
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

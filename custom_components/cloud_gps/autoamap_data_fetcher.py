@@ -15,6 +15,8 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from homeassistant.helpers.storage import Store
+from homeassistant.util import slugify
 import math
 from homeassistant.const import (
     CONF_USERNAME,
@@ -38,6 +40,12 @@ varstinydict = {}
 
 AUTOAMAP_API_HOST = "http://ts.amap.com/ws/tservice/internal/link/mobile/get?ent=2&in="
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        return super().default(obj)
+        
 class DataFetcher:
     """fetch the cloud gps data"""
 
@@ -52,8 +60,21 @@ class DataFetcher:
         self.usertype = None
         self.deviceinfo = {}
         self.trackerdata = {}
+        self.vardata = {}
         self.address = {}
         self.lastgpstime = datetime.datetime.now()
+        
+        # 使用自定义编码器的存储
+        self._store = Store(
+            hass, 
+            version=1, 
+            key=f"cloud_gps_{slugify(location_key)}",
+            private=False,
+            encoder=DateTimeEncoder  # 使用自定义编码器
+        )
+
+        # 使用简单标志而不是立即加载
+        self._persisted_data_loaded = False
         
         headers = {
             'Host': 'ts.amap.com',
@@ -64,29 +85,6 @@ class DataFetcher:
         }
         self.session_autoamap.headers.update(headers)
         
-        global varstinydict
-        _LOGGER.debug("varstinydict: %s", varstinydict)
-        if not varstinydict.get("laststoptime_"+self.location_key):            
-            varstinydict["laststoptime_"+self.location_key] = ""
-        if not varstinydict.get("lastlat_"+self.location_key):
-            varstinydict["lastlat_"+self.location_key] = 0
-        if not varstinydict.get("lastlon_"+self.location_key):
-            varstinydict["lastlon_"+self.location_key] = 0
-        if not varstinydict.get("isonline_"+self.location_key):
-            varstinydict["isonline_"+self.location_key] = "离线"
-        if not varstinydict.get("lastonlinetime_"+self.location_key):
-            varstinydict["lastonlinetime_"+self.location_key] = ""
-        if not varstinydict.get("lastofflinetime_"+self.location_key):
-            varstinydict["lastofflinetime_"+self.location_key] = ""        
-        if not varstinydict.get("runorstop_"+self.location_key):
-            varstinydict["runorstop_"+self.location_key] = "stop"
-        if not varstinydict.get("course_"+self.location_key):
-            varstinydict["course_"+self.location_key] = 0
-        if not varstinydict.get("speed_"+self.location_key):
-            varstinydict["speed_"+self.location_key] = 0
-
-
-
     def _get_devices_info(self):        
         url = str.format(AUTOAMAP_API_HOST + self.password.split("||")[0])
         p_data = self.password.split("||")[2]
@@ -128,10 +126,36 @@ class DataFetcher:
         bearing = math.degrees(math.atan2(y, x))
         return int((bearing + 360) % 360)
         
+    async def _load_persisted_data(self):
+        """异步加载持久化数据"""
+        try:
+            self._persisted_data = await self._store.async_load() or {}
+            _LOGGER.debug("%s Loaded persisted data: %s", self.device_imei, self._persisted_data)
 
+        except Exception as e:
+            _LOGGER.error("%s Error loading persisted data: %s", self.device_imei, e)
+            self._persisted_data = {}
+    
+    async def _persist_data(self):
+        """异步保存数据到持久化存储"""
+        try:
+            # 准备要保存的数据，确保所有 datetime 对象都被转换为字符串
+            data_to_save = {
+                "vardata": self.vardata,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            
+            await self._store.async_save(data_to_save)
+            _LOGGER.debug("%s Persisted data saved", self.device_imei)
+        except Exception as e:
+            _LOGGER.error("%s Error saving persisted data: %s", self.device_imei, e)
         
     async def get_data(self): 
-        
+        # 延迟加载持久化数据（仅在第一次更新时）
+        if not self._persisted_data_loaded:
+            await self._load_persisted_data()
+            self._persisted_data_loaded = True
+            
         try:
             async with timeout(10): 
                 devicesinfodata =  await self.hass.async_add_executor_job(self._get_devices_info)
@@ -146,7 +170,9 @@ class DataFetcher:
                 
         for imei in self.device_imei:
             _LOGGER.debug("get info imei: %s", imei)
-            self.trackerdata[imei] = {}
+            #启动后第一次加载重启前保留的数据
+            self.vardata[imei] = self._persisted_data.get("vardata", {}).get(imei,{})
+
             for infodata in devicesinfodata:
                 if infodata.get("tid") == imei:
                     self.deviceinfo[imei] = infodata
@@ -156,26 +182,29 @@ class DataFetcher:
                     querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     thislat = infodata["naviLocInfo"]["lat"]
                     thislon = infodata["naviLocInfo"]["lon"]
+                    lastlat = self.vardata[imei].get("lastlat",0)
+                    lastlon = self.vardata[imei].get("lastlon",0)
                     
-                    distance = self.get_distance(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
+                    distance = self.get_distance(thislat, thislon, lastlat, lastlon)
                     status = "停车"
                     if distance > 10:
-                        _LOGGER.debug("状态为运动: %s ,%s ,%s", varstinydict,thislat,thislon)
+                        _LOGGER.debug("状态为运动: %s ,%s", thislat,thislon)
                         status = "行驶"
                         distancetime = (datetime.datetime.now() - self.lastgpstime).total_seconds()
                         if distancetime > 1 and distance < 10000:
-                            varstinydict["speed_"+self.location_key] = round((distance / distancetime * 3.6), 1)
-                            varstinydict["course_"+self.location_key] = self.calculate_bearing(thislat, thislon, varstinydict["lastlat_"+self.location_key], varstinydict["lastlon_"+self.location_key])
+                            self.vardata[imei]["speed"] = round((distance / distancetime * 3.6), 1)
+                            self.vardata[imei]["course"] = self.calculate_bearing(thislat, thislon, lastlat, lastlon)
                         self.lastgpstime = datetime.datetime.now()
-                        varstinydict["runorstop_"+self.location_key] = "run"
-                        varstinydict["lastlat_"+self.location_key] = thislat
-                        varstinydict["lastlon_"+self.location_key] = thislon
-                    elif varstinydict["runorstop_"+self.location_key] == "run":
-                        _LOGGER.debug("变成静止: %s", varstinydict)
+                        self.vardata[imei]["runorstop"] = "run"
+                        self.vardata[imei]["lastlat"] = thislat
+                        self.vardata[imei]["lastlon"] = thislon
+                        
+                    elif self.vardata[imei].get("runorstop","run") == "run":
+                        _LOGGER.debug("变成静止: %s ,%s", thislat,thislon)
                         status = "静止"
-                        varstinydict["laststoptime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        varstinydict["runorstop_"+self.location_key] = "stop"
-                        varstinydict["speed_"+self.location_key] = 0
+                        self.vardata[imei]["laststoptime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        self.vardata[imei]["runorstop"] = "stop"
+                        self.vardata[imei]["speed"] = 0
                         
                     if infodata['naviStatus'] == 1:
                         naviStatus = "导航中"
@@ -191,21 +220,22 @@ class DataFetcher:
                     else:
                         onlinestatus = "未知"
                         
-                    if onlinestatus == "离线" and (varstinydict["isonline_"+self.location_key] == "在线"):
-                        varstinydict["lastofflinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        varstinydict["isonline_"+self.location_key] = "离线"
-                    if onlinestatus == "在线" and (varstinydict["isonline_"+self.location_key] == "离线"):
-                        varstinydict["lastonlinetime_"+self.location_key] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        varstinydict["isonline_"+self.location_key] = "在线" 
+                    if onlinestatus == "离线" and self.vardata[imei].get("isonline","在线") == "在线":
+                        self.vardata[imei]["lastofflinetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        self.vardata[imei]["isonline"] = "离线"
+                    if onlinestatus == "在线" and self.vardata[imei].get("isonline","离线") == "离线":
+                        self.vardata[imei]["lastonlinetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        self.vardata[imei]["isonline"] = "在线"
                 
-                    lastofflinetime = varstinydict["lastofflinetime_"+self.location_key]
-                    lastonlinetime = varstinydict["lastonlinetime_"+self.location_key]
-                    onlinestatus = varstinydict["isonline_"+self.location_key]
-                    laststoptime = varstinydict["laststoptime_"+self.location_key] 
-                    runorstop =  varstinydict["runorstop_"+self.location_key]
-                    speed =  varstinydict["speed_"+self.location_key]
-                    course =  varstinydict["course_"+self.location_key]
-                        
+                    lastofflinetime = self.vardata[imei].get("lastofflinetime","")
+                    lastonlinetime = self.vardata[imei].get("lastonlinetime","")
+                    onlinestatus = self.vardata[imei].get("isonline","离线")
+                    laststoptime = self.vardata[imei].get("laststoptime","")
+                    runorstop =  self.vardata[imei].get("runorstop","运动")
+                    speed =  self.vardata[imei].get("speed",0)
+                    course =  self.vardata[imei].get("course",0)
+                    await self._persist_data()
+                    
                     if laststoptime != "" and runorstop ==  "stop":
                         parkingtime=self.time_diff(int(time.mktime(time.strptime(laststoptime, "%Y-%m-%d %H:%M:%S")))) 
                     else:
