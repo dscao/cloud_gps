@@ -1,94 +1,97 @@
 {
     "config": {
-        "title": "云平台GPS",
+        "title": "Cloud GPS",
         "step": {
             "user": {
-                "title": "云平台GPS",
-                "description": "配置完成后请进入选项中启用相关设备。如果您需要配置方面的帮助，请查看此处: https://github.com/dscao/cloud_gps",
+                "title": "Cloud GPS",
+                "description": "After configuration, please enter the options to enable related devices. If you need help with configuration, please see here: https://github.com/dscao/cloud_gps",
                 "data": {
-                    "name": "名称",
-					"username": "用户名",
-                    "password": "用户密码",
-                    "webhost": "服务器"
+                    "name": "Name",
+					"username": "Username",
+                    "password": "Password",
+                    "webhost": "Server"
                 }
             }
         },
         "error": {
-            "communication": "用户名、密码可能无效，请检查。"
+            "communication": "Username and password may be invalid, please check."
         },
         "abort": {
-            "single_instance_allowed": "仅允许单个配置.",
-            "already_configured": "请勿重复配置."
+            "single_instance_allowed": "Only a single configuration is allowed.",
+            "already_configured": "Do not reconfigure."
         }
     },
 	"options": {
         "step": {
             "user":{
                 "data": {
-                    "password": "密码或token，当原来的过期或失效时修改。",
-                    "device_imei": "启用的设备唯一编号(imei、mac、id等)",
-                    "attr_show": "属性中显示停车时间等更丰富信息",
-					"gps_conver": "从平台获取原始数据的座标系",
-					"update_interval_seconds": "更新间隔时间(10-3600秒),建议设为90",
-					"sensors": "传感器",
-                    "switchs": "开关",
-                    "buttons": "按钮",
-                    "with_map_card": "实体更多信息对话框显示地图,需已安装百度地图或墨澜地图集成",
-                    "addressapi": "地址获取接口，使用 API 前请您先注册: [高德账号web服务key](https://lbs.amap.com/dev/key) , [百度账号服务端AK](https://lbsyun.baidu.com/apiconsole/key)  , [腾讯WebServiceAPI Key](https://lbs.qq.com/dev/console/application/mine) 。",
-                    "api_key": "接口密钥，为空时不获取地址。",
-                    "private_key": "私钥值，数字签名时填写，否则留空。"
+                    "password": "Password or token, modify when the original expires or fails.",
+                    "device_imei": "Enabled device unique number (imei, mac, id, etc.)",
+                    "attr_show": "Display more information such as parking time in attributes",
+					"gps_conver": "Coordinate system for obtaining raw data from the platform",
+					"update_interval_seconds": "Update interval (10-3600 seconds), recommended to set to 90",
+					"sensors": "Sensors",
+                    "switchs": "Switches",
+                    "buttons": "Buttons",
+                    "with_map_card": "Display map in the entity more information dialog, requires installation of Baidu Map or MokeLan Map integration",
+                    "addressapi": "Address acquisition interface. Please register first before using API: [Gaode account web service key](https://lbs.amap.com/dev/key) , [Baidu account server-side AK](https://lbsyun.baidu.com/apiconsole/key)  , [Tencent WebServiceAPI Key](https://lbs.qq.com/dev/console/application/mine).",
+                    "api_key": "Interface key, leave blank if not acquiring address.",
+                    "private_key": "Private key value, fill in when using digital signature, otherwise leave blank."
                 },
-                "description": "更多设置，座标系：途强/中移行车卫士-WGS84，高德/优驾/哈啰/小牛-国测局。"
+                "description": "More settings, coordinate system: Tucheng/Zhongxing Weishi-WGS84, Gaode/Youjia/Hello/Xiaoniu-National Measurement Bureau."
             }
         }
     },
 	"selector": {
 		"gps_conver": {
 			"options": {
-				"wgs84": "WGS84坐标系",
-				"gcj02": "国测局坐标（火星坐标，GCJ02）",
-                "bd09": "百度坐标（BD09）"
+				"wgs84": "WGS84 Coordinate System",
+				"gcj02": "National Measurement Bureau Coordinate (Mars Coordinate, GCJ02)",
+                "bd09": "Baidu Coordinate (BD09)"
 			}
 		},
         "with_map_card": {
 			"options": {
-				"none": "不显示地图",
-				"baidu-map": "显示百度地图",
-                "gaode-map": "显示高德地图"
+				"none": "Do not display map",
+				"baidu-map": "Display Baidu Map",
+                "gaode-map": "Display Gaode Map"
 			}
 		},
         "sensors": {
 			"options": {
-				"laststoptime": "上次停止时间",
-				"parkingtime": "停车时长",
-                "address": "当前地址",
-                "speed": "当前速度",
-                "totalkm": "总里程",
-                "status": "车辆状态",
-                "acc": "ACC状态",
-                "powbattery": "电池电压"
+				"laststoptime": "Last Stop Time",
+				"parkingtime": "Parking Duration",
+                "lastseen": "Last Seen Time",
+                "latest_report_time": "Latest Report Time",
+                "address": "Current Address",
+                "speed": "Current Speed",
+                "totalkm": "Total Mileage",
+                "status": "Status",
+                "acc": "ACC Status",
+                "battery_status": "Battery Status",
+                "powbattery": "Battery Voltage"
 			}
 		},
         "switchs": {
 			"options": {
-				"defence": "设防",
-                "defencemode": "自动设防模式",
-				"open_lock": "开锁启动"
+				"defence": "defence",
+                "defencemode": "defence mode",
+				"open_lock": "open lock"
 			}
 		},
         "buttons": {
 			"options": {
-				"bell": "鸣笛寻车",
-                "nowtrack": "立即定位"
+				"bell": "bell",
+                "nowtrack": "now track"
 			}
 		},
         "addressapi": {
 			"options": {
-                "none": "不从api获取地址,使用原平台中的地址信息",
-                "free": "免key获取百度基础地理信息(稳定性和精确性较差)",
-				"gaode": "高德地图逆地理接口",
-				"baidu": "百度地图逆地理接口",
-				"tencent": "腾讯地图逆地理接口"
+                "none": "Do not acquire address from API, use address information in the original platform",
+                "free": "Free acquisition of Baidu basic geographic information (stability and accuracy are poor)",
+				"gaode": "Gaode Map Reverse Geocoding Interface",
+				"baidu": "Baidu Map Reverse Geocoding Interface",
+				"tencent": "Tencent Map Reverse Geocoding Interface"
 			}
 		}
 	},
@@ -97,112 +100,121 @@
 			"cloud_device_tracker": {
 				"state_attributes": {
 					"speed": {
-					  "name": "当前车速"
+					  "name": "Speed"
 					},
 					"course": {
-					  "name": "行车方向"
+					  "name": "Direction"
 					},
 					"status": {
-					  "name": "当前状态"
+					  "name": "Status"
 					},
                     "onlinestatus": {
-					  "name": "在线状态"
+					  "name": "Online Status"
 					},
 					"device_status": {
-					  "name": "设备状态"
+					  "name": "Device Status"
 					},
 					"navistatus": {
-					  "name": "导航状态"
+					  "name": "Navigation Status"
 					},
 					"macaddr": {
-					  "name": "网卡地址"
+					  "name": "MAC Address"
 					},
                     "expiration": {
-					  "name": "平台到期"
+					  "name": "Expiration"
 					},
 					"lastofflinetime": {
-					  "name": "上次离线时间"
+					  "name": "Last Offline Time"
 					},					
 					"lastonlinetime": {
-					  "name": "上次上线时间"
+					  "name": "Last Online Time"
 					},
 					"last_update": {
-					  "name": "通讯时间"
+					  "name": "Communication Time"
 					},
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					},
 					"runorstop": {
-					  "name": "运动状态",
+					  "name": "Running or Stopped",
 					  "state": {
-						"stop": "静止",
-						"run": "运动"
+						"stop": "Stopped",
+						"run": "Running"
 					  }
 					},
-					"laststoptime": {
-					  "name": "停车时间"
+					"lastseen": {
+					  "name": "Last Seen Time"
+					},
+                    "latest_report_time": {
+					  "name": "Latest Report Time"
+					},
+                    "laststoptime": {
+					  "name": "Last Stop Time"
 					},
 					"parkingtime": {
-					  "name": "停车时长"
+					  "name": "Parking Duration"
 					},
 					"battery": {
-					  "name": "电池电量"
+					  "name": "Battery Level"
+					},
+                    "battery_status": {
+					  "name": "Battery Status"
 					},
                     "powbatteryvoltage": {
-					  "name": "外接电压"
+					  "name": "External Voltage"
 					},
                     "smallBatteryPercent": {
-					  "name": "GPS内置电池电量"
+					  "name": "GPS Internal Battery Level"
 					},
                     "batteryvoltage": {
-					  "name": "GPS内置电池电压"
+					  "name": "GPS Internal Battery Voltage"
 					},
                     "defence": {
-					  "name": "设防状态"
+					  "name": "defence"
 					},
                     "powerStatus": {
-					  "name": "电源"
+					  "name": "Power Status"
 					},
                     "percentageElectricQuantity": {
-					  "name": "电量百分比"
+					  "name": "Battery Percentage"
 					},
                     "totalKm": {
-					  "name": "总里程(公里)"
+					  "name": "Total Mileage (km)"
 					},
                     "positionType": {
-					  "name": "定位方式"
+					  "name": "Positioning Type"
 					},
                     "address": {
-					  "name": "地址"
+					  "name": "Address"
 					},
 					"gps_accuracy": {
-					  "name": "GPS精度"
+					  "name": "GPS Accuracy"
 					},
 					"latitude": {
-					  "name": "纬度"
+					  "name": "Latitude"
 					},
 					"longitude": {
-					  "name": "经度"
+					  "name": "Longitude"
 					},
                     "map_gcj_lat": {
-					  "name": "高德地图纬度"
+					  "name": "Gaode Map Latitude"
 					},
 					"map_gcj_lng": {
-					  "name": "高德地图经度"
+					  "name": "Gaode Map Longitude"
 					},
                     "map_bd_lat": {
-					  "name": "百度地图纬度"
+					  "name": "Baidu Map Latitude"
 					},
 					"map_bd_lng": {
-					  "name": "百度地图经度"
+					  "name": "Baidu Map Longitude"
 					},
 					"source_type": {
-					  "name": "数据源",
+					  "name": "Data Source",
 					  "state": {
-						"bluetooth_le": "低功耗蓝牙",
-						"bluetooth": "蓝牙",
-						"gps": "GPS定位",
-						"router": "路由器"
+						"bluetooth_le": "Bluetooth Low Energy",
+						"bluetooth": "Bluetooth",
+						"gps": "GPS Positioning",
+						"router": "Router"
 					  }
 					}
 			    }
@@ -210,110 +222,134 @@
 		},
 		"sensor": {
 			"parkingtime": {
-				"name": "停车时长",
+				"name": "Parking Duration",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"laststoptime": {
-				"name": "上次停止时间",
+				"name": "Last Stop Time",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"address": {
-				"name": "当前地址",
+				"name": "Address",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"speed": {
-				"name": "当前车速",
+				"name": "Speed",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"totalkm": {
-				"name": "总里程",
+				"name": "Total Mileage",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
             "status": {
-				"name": "车辆状态",
+				"name": "Status",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"acc": {
-				"name": "ACC状态",
+				"name": "ACC",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"powbattery": {
-				"name": "电池电压",
+				"name": "Battery Voltage",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
+					}
+				}
+			},
+            "battery_status": {
+				"name": "Battery Status",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "lastseen": {
+				"name": "Last Seen",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "latest_report_time": {
+				"name": "Latest Report Time",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
 					}
 				}
 			}
 	    },
 		"switch": {
 			"defence": {
-				"name": "设防",
+				"name": "defence",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
             "defencemode": {
-				"name": "自动设防模式",
+				"name": "defence mode",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
 			"open_lock": {
-				"name": "开锁启动",
+				"name": "open lock",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			}
 	    },
 		"button": {
 			"bell": {
-				"name": "鸣笛寻车",
+				"name": "bell",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			},
             "nowtrack": {
-				"name": "立即定位",
+				"name": "now track",
 				"state_attributes": {
 					"querytime": {
-					  "name": "查询时间"
+					  "name": "Query Time"
 					}
 				}
 			}
