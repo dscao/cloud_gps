@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-5
+LastEditTime  : 2025-6-8
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -137,9 +137,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     
     await coordinator.async_refresh()
-
+    
     if not coordinator.last_update_success:
-        raise ConfigEntryNotReady
+        _LOGGER.warning("Initial data fetch failed, entities will be created when data becomes available")
+        
+        async def check_data_and_create_entities(_now):
+            if coordinator.data and not coordinator._entity_created:
+                await coordinator.ensure_entities_created()
+
+        entry.async_on_unload(
+            async_track_time_interval(
+                hass,
+                check_data_and_create_entities,
+                datetime.timedelta(seconds=30)
+            )
+        )
 
     undo_listener = entry.add_update_listener(update_listener)
 
@@ -172,8 +184,14 @@ async def async_unload_entry(hass, entry):
 
 
 async def update_listener(hass, entry):
-    """Update listener."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Update listener with entity creation check"""
+    coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
+    
+    # 如果数据已存在但实体未创建，立即创建
+    if coordinator.data and not coordinator._entity_created:
+        await coordinator.ensure_entities_created()
+    else:
+        await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_import_data_fetcher(hass, webhost):
     """异步导入数据获取模块"""
@@ -216,7 +234,10 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         self._coords_old = {}
         self._address = {}
         self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key)
-      
+        
+        self._entity_created = False
+        self._retry_count = 0
+
 
     async def _async_update_data(self):
         """Update data via library."""  
@@ -225,6 +246,10 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
                 data = await self._fetcher.get_data()
                 _LOGGER.debug("%s update_data: %s", self.device_imei, data)                
                 _LOGGER.debug("%s gps_conver: %s", self.device_imei, self._gps_conver)
+                if data and not self._entity_created:
+                    self._entity_created = True
+                    _LOGGER.info("Initial data acquired, entities will be created")
+                    
                 if data:
                     if self._gps_conver == "gcj02":
                         for imei in self.device_imei:
@@ -247,17 +272,31 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
                             data[imei]["attrs"]["address"] = self._address.get(imei)
                     # 保存新数据
                     self.data = data
-
-                            
+        
                 elif not data:
                     _LOGGER.error("%s No data available from API", self.device_imei)
 
-        except Exception as error:
-            _LOGGER.error("%s Error updating data: %s", self.device_imei, error)
+        except (asyncio.TimeoutError, ClientConnectorError) as err:
+            self._retry_count += 1
+            retry_msg = f"[{self.device_imei}]Retry #{self._retry_count} after error: {err}"
             
-        return self.data
- 
-        
+            if not self._entity_created and self._retry_count <= 5:
+                _LOGGER.warning(retry_msg)
+            else:
+                _LOGGER.error(retry_msg)
+
+        except Exception as error:
+            self._retry_count += 1
+            _LOGGER.error("[%s]Unexpected error updating data: %s", self.device_imei, error, exc_info=True)
+            
+        return self.data or {}
+
+    async def ensure_entities_created(self):
+        """Ensure entities are created once data is available"""
+        if not self._entity_created and self.data:
+            self._entity_created = True
+            _LOGGER.info("Data now available, triggering entity creation")
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
         
     async def _get_address_frome_api(self, imei, addressapi, api_key, private_key):
         try:

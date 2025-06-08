@@ -384,11 +384,11 @@ class DataFetcher:
                     devicesinfodata = await self.hass.async_add_executor_job(self._get_devices_info)
                     
             except Exception as e:
-                _LOGGER.error("%s Failed to get data from macless_haystack: %s", self.device_imei, repr(e))
+                #_LOGGER.error("%s Failed to get data from macless_haystack: %s", self.device_imei, repr(e))
                 for imei in self.device_imei:
                     # 如果没有数据，尝试使用持久化数据
                     _LOGGER.warning("%s No new data available, using persisted data", self.device_imei)
-                    self.trackerdata[imei] = self._persisted_data["trackerdata"][imei]
+                    self.trackerdata[imei] = self._persisted_data["trackerdata"][imei] or {}
 
                 
             self._refresh_time = int(datetime.datetime.now().timestamp())
