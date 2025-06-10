@@ -280,7 +280,7 @@ class DataFetcher:
                     duration = time.time() - start_time
                     _LOGGER.debug("Device %s: Decrypted report in %.3fs", imei, duration)
                     
-                    # 优化点4: 如果找到足够新的数据，提前停止
+                    # 如果找到足够新的数据，提前停止
                     if decrypted_data['timestamp'].timestamp() > self.lastseentime + 3600:  # 1小时内的新数据
                         _LOGGER.debug("Device %s: Found sufficiently new data, skipping further reports", imei)
                         break
@@ -389,6 +389,10 @@ class DataFetcher:
                     # 如果没有数据，尝试使用持久化数据
                     _LOGGER.warning("%s No new data available, using persisted data", imei)
                     self.trackerdata[imei] = self._persisted_data.get("trackerdata", {}).get(imei, {})
+                    if not self.trackerdata[imei]:
+                        _LOGGER.warning("%s No new data available and no persisted data", imei)
+                        _LOGGER.warning("请将此%s_devices.json在web端或app端导入测试成功后再加入", imei)
+                    continue
 
                 
             self._refresh_time = int(datetime.datetime.now().timestamp())
@@ -461,7 +465,10 @@ class DataFetcher:
                         _LOGGER.debug("Device %s: No matching reports", imei)
                         # 如果没有新数据，尝试使用持久化数据
                         _LOGGER.warning("%s No new data available, using persisted data", imei)
-                        self.trackerdata[imei] = self._persisted_data["trackerdata"][imei]
+                        self.trackerdata[imei] = self._persisted_data.get("trackerdata", {}).get(imei, {})
+                        if not self.trackerdata[imei]:
+                            _LOGGER.warning("%s No new data available and no persisted data", imei)
+                            _LOGGER.warning("请将此%s_devices.json在web端或app端导入测试成功后再加入", imei)
                         continue
 
                     # 按报告时间降序排序，优先处理最新报告
@@ -540,6 +547,3 @@ class DataFetcher:
         
 class GetDataError(Exception):
     """request error or response data is unexpected"""                
-            
-            
-            
