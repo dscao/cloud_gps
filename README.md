@@ -22,7 +22,8 @@ hacs安装： https://github.com/dscao/cloud_gps
 
 哈啰智能芯接入参数获取方法：https://github.com/louliangsheng/hellobike （现在好像没办法抓包了）
 
-macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack  （加入集成前最好先在项目介绍中的web上测试一下json文件是否能正常获取到定位信息，成功无误后再操作。此项目对于定位实时性要求不高、电源条件受限的场景比较合适。）
+macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-haystack  （加入集成前最好先在项目介绍中的web上测试一下json文件是否能正常获取到定位信息，成功无误后再操作。此项目对于定位实时性要求不高、电源条件受限的场景比较合适。） \
+注：目前已知是要用 https://gitee.com/lovelyelfpop/macless-haystack 中的 generate_keys.py 生成的json才没问题。用一键刷机exe那个生成的格式就会缺少数据不能正常运行。
 
 中移行车卫士参数从小程序中抓包。
 
