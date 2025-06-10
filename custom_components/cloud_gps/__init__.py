@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-8
+LastEditTime  : 2025-6-10
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -79,7 +79,7 @@ from .const import (
 )
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2025.6.5'
+__version__ = '2025.6.10'
 
 _LOGGER = logging.getLogger(__name__)
     
@@ -137,21 +137,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     
     await coordinator.async_refresh()
-    
-    if not coordinator.last_update_success:
-        _LOGGER.warning("Initial data fetch failed, entities will be created when data becomes available")
         
-        async def check_data_and_create_entities(_now):
-            if coordinator.data and not coordinator._entity_created:
-                await coordinator.ensure_entities_created()
+    for imei in device_imei:
 
-        entry.async_on_unload(
-            async_track_time_interval(
+        if not coordinator.data.get(imei):
+            _LOGGER.warning("%s Initial data fetch failed, entities will be created when data becomes available", imei)
+            
+            async def check_data_and_create_entities(_now):
+                _LOGGER.debug("%s entities try to creat again", imei)
+                await coordinator.async_refresh()
+                if coordinator.data.get(imei) and not coordinator._entity_created:
+                    await coordinator.ensure_entities_created()
+
+            # 立即启动定时器，并获取用于取消它的函数
+            cancel_timer = async_track_time_interval(
                 hass,
                 check_data_and_create_entities,
-                datetime.timedelta(seconds=30)
+                datetime.timedelta(seconds=30),
             )
-        )
+
+            # 将取消函数注册到卸载事件中，以确保在卸载集成时停止定时器
+            entry.async_on_unload(cancel_timer)
+            
+            break
 
     undo_listener = entry.add_update_listener(update_listener)
 
@@ -246,48 +254,51 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
                 data = await self._fetcher.get_data()
                 _LOGGER.debug("%s update_data: %s", self.device_imei, data)                
                 _LOGGER.debug("%s gps_conver: %s", self.device_imei, self._gps_conver)
-                if data and not self._entity_created:
-                    self._entity_created = True
-                    _LOGGER.info("Initial data acquired, entities will be created")
                     
                 if data:
-                    if self._gps_conver == "gcj02":
-                        for imei in self.device_imei:
-                            data[imei]["thislon"], data[imei]["thislat"] = gcj02towgs84(data[imei]["thislon"], data[imei]["thislat"])
-                    if self._gps_conver == "bd09":
-                        for imei in self.device_imei:
-                            data[imei]["thislon"], data[imei]["thislat"] = bd09_to_wgs84(data[imei]["thislon"], data[imei]["thislat"])
                     for imei in self.device_imei:
-                        self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
-                        _LOGGER.debug("self._coords[%s]: %s", imei, self._coords[imei])
-                        if not self._coords_old.get(imei):
-                            self._coords_old[imei] = [0, 0]
+                        if data.get(imei):
+                            if self._gps_conver == "gcj02":
+                                data[imei]["thislon"], data[imei]["thislat"] = gcj02towgs84(data[imei]["thislon"], data[imei]["thislat"])
+                            if self._gps_conver == "bd09":
+                                data[imei]["thislon"], data[imei]["thislat"] = bd09_to_wgs84(data[imei]["thislon"], data[imei]["thislat"])
                             
-                    if self._addressapi != "none" and self._addressapi != None:
-                        for imei in self.device_imei: 
-                            distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
-                            if distance > self._address_distance:
-                                self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
-                                _LOGGER.debug("api_get_address: %s", self._address.get(imei))
-                            data[imei]["attrs"]["address"] = self._address.get(imei)
+                            self._coords[imei] = [data[imei]["thislon"], data[imei]["thislat"]]
+                            _LOGGER.debug("self._coords[%s]: %s", imei, self._coords[imei])
+                            
+                            if not self._coords_old.get(imei):
+                                self._coords_old[imei] = [0, 0]
+                                
+                            if self._addressapi != "none" and self._addressapi != None:
+                                distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
+                                if distance > self._address_distance:
+                                    self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
+                                    _LOGGER.debug("api_get_address: %s", self._address.get(imei))
+                                data[imei]["attrs"]["address"] = self._address.get(imei)
                     # 保存新数据
                     self.data = data
         
                 elif not data:
                     _LOGGER.error("%s No data available from API", self.device_imei)
-
+                    
         except (asyncio.TimeoutError, ClientConnectorError) as err:
             self._retry_count += 1
-            retry_msg = f"[{self.device_imei}]Retry #{self._retry_count} after error: {err}"
+            _LOGGER.warning(
+                "[%s]Error communicating with API (retry #%s): %s",
+                self.device_imei,
+                self._retry_count,
+                err,
+            )
             
-            if not self._entity_created and self._retry_count <= 5:
-                _LOGGER.warning(retry_msg)
-            else:
-                _LOGGER.error(retry_msg)
-
         except Exception as error:
             self._retry_count += 1
-            _LOGGER.error("[%s]Unexpected error updating data: %s", self.device_imei, error, exc_info=True)
+            _LOGGER.error(
+                "[%s]Unexpected error updating data (retry #%s): %s",
+                self.device_imei,
+                self._retry_count,
+                error,
+                exc_info=True,
+            )
             
         return self.data or {}
 

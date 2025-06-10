@@ -10,6 +10,7 @@ import urllib.parse
 from aiohttp.client_exceptions import ClientConnectorError
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.restore_state import RestoreEntity
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09
 
 from homeassistant.const import (
@@ -57,7 +58,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         async_add_entities([CloudGPSEntity(hass, webhost, coordinatordata, attr_show, with_map_card, coordinator)], False)
 
 
-class CloudGPSEntity(TrackerEntity):
+class CloudGPSEntity(RestoreEntity, TrackerEntity):
     """Representation of a tracker condition with state restoration."""
     _attr_has_entity_name = True
     _attr_name = None
@@ -67,7 +68,8 @@ class CloudGPSEntity(TrackerEntity):
         self._hass = hass
         self._imei = imei
         self._webhost = webhost
-        self.coordinator = coordinator   
+        self.coordinator = coordinator
+        self._unique_id = None
         self._attr_show = attr_show
         self._with_map_card = with_map_card
         self._last_state = {
@@ -84,19 +86,18 @@ class CloudGPSEntity(TrackerEntity):
     @property
     def unique_id(self):
         """Return a unique_id for this entity."""
-        _LOGGER.debug("device_tracker_unique_id: %s", self.coordinator.data[self._imei]["location_key"])
-        return self.coordinator.data[self._imei]["location_key"]
+        return self._unique_id
 
     @property
     def device_info(self):
         """Return the device info."""
         return {
-            "identifiers": {(DOMAIN, self.coordinator.data[self._imei]["location_key"])},
+            "identifiers": {(DOMAIN, self._unique_id)},
             "name": self._imei,
             "manufacturer": self._webhost,
             "entry_type": DeviceEntryType.SERVICE,
-            "model": self.coordinator.data[self._imei]["deviceinfo"]["device_model"],
-            "sw_version": self.coordinator.data[self._imei]["deviceinfo"]["sw_version"],
+            "model": self.coordinator.data.get(self._imei,{}).get("deviceinfo",{}).get("device_mode",""),
+            "sw_version": self.coordinator.data.get(self._imei,{}).get("deviceinfo",{}).get("sw_version",""),
         }
     @property
     def should_poll(self):
@@ -137,11 +138,30 @@ class CloudGPSEntity(TrackerEntity):
 
 
     async def async_added_to_hass(self):
-        """Connect to dispatcher."""
+        """Connect to dispatcher and restore state."""
+        await super().async_added_to_hass()
+        # 恢复之前保存的状态
+        if (last_state := await self.async_get_last_state()) is not None:
+            # 仅当协调器尚未提供数据时才恢复状态
+            _LOGGER.debug("之前保存的状态: %s", last_state)
+            _LOGGER.debug("协调器提供的数据: %s", self.coordinator.data.get(self._imei))
+            if not self.coordinator.data.get(self._imei):
+                self._last_state['longitude'] = last_state.attributes.get(ATTR_LONGITUDE)
+                self._last_state['latitude'] = last_state.attributes.get(ATTR_LATITUDE)
+                self._last_state['location_accuracy'] = last_state.attributes.get(ATTR_GPS_ACCURACY, 0)
+                self._last_state['source_type'] = last_state.attributes.get("source_type", "gps")
+                self._attrs = {k: v for k, v in last_state.attributes.items() if k not in [ATTR_LONGITUDE, ATTR_LATITUDE, ATTR_GPS_ACCURACY, 'source_type']}
+                self._state_restored = True  # 标记已恢复状态
+                _LOGGER.debug("Restored state for %s: %s", self.entity_id, last_state)
+        
         self.async_on_remove(
             self.coordinator.async_add_listener(self.async_write_ha_state)
         )
-
+        
+        # 如果协调器有数据，立即加载状态
+        if self.coordinator.data.get(self._imei):
+            self._load_state()
+            self.async_write_ha_state()
 
     async def async_update(self):
         """Update cloud entity."""
@@ -152,7 +172,7 @@ class CloudGPSEntity(TrackerEntity):
     def _load_state(self):
         data = self.coordinator.data.get(self._imei)
         if data:
-            
+            self._unique_id = data.get("location_key")
             # 更新位置信息
             self._last_state["longitude"] = data.get("thislon")
             self._last_state["latitude"] = data.get("thislat")
@@ -184,6 +204,9 @@ class CloudGPSEntity(TrackerEntity):
             
         else:
             # 保持最后的有效状态
-            _LOGGER.warning("Failed to obtain new coordinates, using last known state: %s", self._last_state)
-
+            _LOGGER.warning("%s Failed to obtain new coordinates, using last known state: %s", self._imei, self._last_state)
+            
+            # 如果是第一次加载，尝试从恢复的状态获取
+            if not hasattr(self, '_state_restored'):
+                _LOGGER.debug("No data available for %s, will try to restore state later", self._imei)
                 
