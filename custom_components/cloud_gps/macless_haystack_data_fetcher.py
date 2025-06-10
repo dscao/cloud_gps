@@ -387,8 +387,8 @@ class DataFetcher:
                 #_LOGGER.error("%s Failed to get data from macless_haystack: %s", self.device_imei, repr(e))
                 for imei in self.device_imei:
                     # 如果没有数据，尝试使用持久化数据
-                    _LOGGER.warning("%s No new data available, using persisted data", self.device_imei)
-                    self.trackerdata[imei] = self._persisted_data["trackerdata"][imei] or {}
+                    _LOGGER.warning("%s No new data available, using persisted data", imei)
+                    self.trackerdata[imei] = self._persisted_data.get("trackerdata", {}).get(imei, {})
 
                 
             self._refresh_time = int(datetime.datetime.now().timestamp())
@@ -460,7 +460,7 @@ class DataFetcher:
                     if not matched_reports_for_this_device:
                         _LOGGER.debug("Device %s: No matching reports", imei)
                         # 如果没有新数据，尝试使用持久化数据
-                        _LOGGER.warning("%s No new data available, using persisted data", self.device_imei)
+                        _LOGGER.warning("%s No new data available, using persisted data", imei)
                         self.trackerdata[imei] = self._persisted_data["trackerdata"][imei]
                         continue
 
