@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-10
+LastEditTime  : 2025-6-11
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -79,7 +79,7 @@ from .const import (
 )
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2025.6.10'
+__version__ = '2025.6.11'
 
 _LOGGER = logging.getLogger(__name__)
     
@@ -112,6 +112,7 @@ async def async_setup(hass: HomeAssistant, config: Config) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up cloud_gps as config entry."""        
+    titlename = entry.title
     username = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
     webhost = entry.data[CONF_WEB_HOST]
@@ -131,7 +132,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (ValueError, ImportError) as e:
         raise ConfigEntryNotReady(str(e))
     data_fetcher_class = module.DataFetcher
-    _LOGGER.debug(device_imei)
+    _LOGGER.debug("%s 集成条目中已启用设备 %s", titlename, device_imei)
+    if not device_imei:
+        _LOGGER.error("%s 配置中未启用任何设备，请进入配置中设置启用的设备唯一编号。", titlename)
     coordinator = CloudDataUpdateCoordinator(
         hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key
     )

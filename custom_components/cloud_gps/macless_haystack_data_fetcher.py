@@ -116,6 +116,21 @@ class DataFetcher:
             data = json.loads(input_string)
             accessory_id = data[0].get("id")
             ids = data[0].get("additionalHashedAdvKeys")
+            if not ids:
+                additionalKeys = data[0].get("additionalKeys")
+                additional_hashed_keys = []
+                for priv_key in additionalKeys:
+                    if not priv_key:
+                        continue
+                    try:
+                        # Base64解码 -> SHA256哈希 -> Base64编码
+                        decoded_key = base64.b64decode(priv_key)
+                        hashed = hashlib.sha256(decoded_key).digest()
+                        hashed_b64 = base64.b64encode(hashed).decode('ascii')
+                        additional_hashed_keys.append(hashed_b64)
+                    except Exception as e:
+                        _LOGGER.warning(f"Error processing key {priv_key}: {str(e)}")
+                ids = additional_hashed_keys
 
             formatted_data = {
                 "accessoryId": accessory_id,
@@ -280,7 +295,7 @@ class DataFetcher:
                     duration = time.time() - start_time
                     _LOGGER.debug("Device %s: Decrypted report in %.3fs", imei, duration)
                     
-                    # 优化点4: 如果找到足够新的数据，提前停止
+                    # 如果找到足够新的数据，提前停止
                     if decrypted_data['timestamp'].timestamp() > self.lastseentime + 3600:  # 1小时内的新数据
                         _LOGGER.debug("Device %s: Found sufficiently new data, skipping further reports", imei)
                         break
@@ -426,15 +441,41 @@ class DataFetcher:
                     if "hashedAdvKey" in target_device_config and "privateKey" in target_device_config:
                         main_hashed_key = target_device_config["hashedAdvKey"]
                         main_private_key = target_device_config["privateKey"]
-                        if main_hashed_key and main_private_key: #确保值不为空
-                            key_map[main_hashed_key] = main_private_key
-                            #_LOGGER.debug("Device %s: Added main key mapping for HashedAdvKey: %s", imei, main_hashed_key)
-                    else:
-                        _LOGGER.warning("Device %s: Main 'hashedAdvKey' or 'privateKey' missing or empty in JSON config.", imei)
+                        
+                    # 兼容 一键airtag.exe 生成的json
+                    elif "privateKey" in target_device_config:
+                        main_private_key = target_device_config["privateKey"]
+                        try:
+                            # Base64解码 -> SHA256哈希 -> Base64编码
+                            decoded_key = base64.b64decode(main_private_key)
+                            hashed = hashlib.sha256(decoded_key).digest()
+                            hashed_b64 = base64.b64encode(hashed).decode('ascii')
+                            main_hashed_key = hashed_b64
+                        except Exception as e:
+                            _LOGGER.warning(f"Error processing key {main_private_key}: {str(e)}")
+                    if main_hashed_key and main_private_key:  # 确保值不为空
+                        key_map[main_hashed_key] = main_private_key
 
-                    # 添加附加密钥对
-                    additional_hashed_keys = target_device_config.get("additionalHashedAdvKeys", [])
+                    # 处理辅助密钥
                     additional_private_keys = target_device_config.get("additionalKeys", [])
+
+                    if "additionalHashedAdvKeys" in target_device_config:
+                        additional_hashed_keys = target_device_config["additionalHashedAdvKeys"]
+
+                    # 兼容 一键airtag.exe 生成的json
+                    else:
+                        additional_hashed_keys = []
+                        for priv_key in additional_private_keys:
+                            if not priv_key:
+                                continue
+                            try:
+                                # Base64解码 -> SHA256哈希 -> Base64编码
+                                decoded_key = base64.b64decode(priv_key)
+                                hashed = hashlib.sha256(decoded_key).digest()
+                                hashed_b64 = base64.b64encode(hashed).decode('ascii')
+                                additional_hashed_keys.append(hashed_b64)
+                            except Exception as e:
+                                _LOGGER.warning(f"Error processing key {priv_key}: {str(e)}")
 
                     if len(additional_hashed_keys) == len(additional_private_keys):
                         for i in range(len(additional_hashed_keys)):
