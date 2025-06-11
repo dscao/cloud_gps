@@ -91,7 +91,7 @@ class DataFetcher:
         url = str.format(self.username.split("||")[0])
         headers = {}
         if self.username.split("||")[1] != "0":
-            auth_header = f"Basic {self.encode_username_password_sha1(self.username.split('||')[1], self.username.split('||')[2]).decode('utf-8')}"
+            auth_header = self.basic_auth(self.username.split('||')[1], self.username.split('||')[2])
             headers = {"authorization": auth_header}
         
         p_data = self.json_format_data(self.password)
@@ -100,16 +100,10 @@ class DataFetcher:
         _LOGGER.debug("resp_json: %s", resp)
         return resp
         
-    def encode_username_password(self, username, password):
-        credentials = f"{username}:{password}"
-        encoded_credentials = base64.b64encode(credentials.encode('utf-8'))
-        return encoded_credentials
-
-    def encode_username_password_sha1(self, username, password):
-        credentials = f"{username}:{password}"
-        hashed_credentials = hashlib.sha1(credentials.encode('utf-8')).digest()
-        encoded_credentials = base64.b64encode(hashed_credentials)
-        return encoded_credentials
+    def basic_auth(self, username, password):
+        userpass = f"{username}:{password}"
+        encoded_credentials = base64.b64encode(userpass.encode('utf-8')).decode('utf-8')
+        return "Basic " + encoded_credentials
     
     def json_format_data(self, input_string):
         try:

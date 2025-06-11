@@ -102,7 +102,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         md5.update(text.encode('utf-8'))        
         encrypted_text = md5.hexdigest()        
         return encrypted_text
-
+        
     def _login_tuqiang123(self, username, password):
         p_data = {
             'ver': '1',
@@ -259,21 +259,33 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return resp
         
     def _test_macless_haystack(self, url, username, password):
-        auth_header = f"Basic {self.encode_username_password_sha1(username, password).decode('utf-8')}"
-        headers= {"authorization": auth_header}
-        resp = requests.get(url, headers=headers)
-        return resp
-        
-    def encode_username_password(self, sername, password):
-        credentials = f"{username}:{password}"
-        encoded_credentials = base64.b64encode(credentials.encode('utf-8'))
-        return encoded_credentials
+        auth_header = self.basic_auth(username, password)
+        headers = {"authorization": auth_header}
+        _LOGGER.debug("url: %s, headers:%s", url, headers)
+        try:
+            resp = requests.get(url, headers=headers)
+            resp.raise_for_status()
 
-    def encode_username_password_sha1(self, username, password):
-        credentials = f"{username}:{password}"
-        hashed_credentials = hashlib.sha1(credentials.encode('utf-8')).digest()
-        encoded_credentials = base64.b64encode(hashed_credentials)
-        return encoded_credentials
+        except requests.exceptions.ConnectionError as e:
+            _LOGGER.error(f"连接错误：{e}")
+            return {"success": False, "error": f"连接错误：{e}"}  # 返回字典
+        except requests.exceptions.Timeout as e:
+            _LOGGER.error(f"请求超时：{e}")
+            return {"success": False, "error": f"请求超时：{e}"}
+        except requests.exceptions.HTTPError as e:
+            _LOGGER.error(f"HTTP 错误：状态码 {e.response.status_code}, 原因：{e}")
+            return {"success": False, "error": f"HTTP 错误：状态码 {e.response.status_code}, 原因：{e}"}
+        except requests.exceptions.RequestException as e:  # 处理其他所有请求异常
+            _LOGGER.error(f"请求失败：{e}")
+            return {"success": False, "error": f"请求失败：{e}"}
+
+        _LOGGER.debug(resp)
+        return {"success": True, "response": resp}
+        
+    def basic_auth(self, username, password):
+        userpass = f"{username}:{password}"
+        encoded_credentials = base64.b64encode(userpass.encode('utf-8')).decode('utf-8')
+        return "Basic " + encoded_credentials
             
     async def async_step_user(self, user_input={}):
         self._errors = {}
@@ -320,6 +332,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = status.get("msg")
+                    
             elif webhost=="tuqiang123.com":
                 headers = {
                     'User-Agent': USER_AGENT
@@ -349,6 +362,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = status.get("msg")
+                    
 
             elif webhost=="gooddriver.cn":
                 headers = {
@@ -385,6 +399,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = status.get("ERROR_MESSAGE")
+                    
 
             elif webhost=="niu.com":
                 headers = {
@@ -421,6 +436,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+                    
             elif webhost=="cmobd.com":
                 headers = {
                     'Host': 'lsapp.cmobd.com',                    
@@ -462,6 +478,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+                    
             elif webhost=="hellobike.com":
                 headers = {
                     'content_type': 'text/plain;charset=utf-8',
@@ -475,7 +492,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 if status.get("code") != 0:
                     self._errors["base"] = status.get("msg")
-                    return await self._show_config_form(user_input)
+                    
                     
                 if status["data"].get("userBikeList"):
                     deviceslist_data = status["data"]["userBikeList"]
@@ -500,6 +517,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+                    
             elif webhost=="auto.amap.com":
                 headers = {
                     'Host': 'ts.amap.com',
@@ -539,22 +557,31 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+                    
             elif webhost=="macless_haystack":
                 if username.find("||") == -1:
                     username = username + "||0||0"
                 status = await self.hass.async_add_executor_job(self._test_macless_haystack, username.split("||")[0], username.split("||")[1], username.split("||")[2])
                 _LOGGER.debug(status)
                 
-                if status.text != "Nothing to see here.":
-                    self._errors["base"] = "服务器参数不正确，返回的值提示服务器不正确。"
+                if status.get("success") == False:
+                    self._errors["base"] = status.get("error")
+                    return await self._show_config_form(user_input)
+                
+                if status.get("response").text != "Nothing to see here.":
+                    _LOGGER.error("服务器参数不正确，返回的值提示服务器不正确。 %s", status.get("error",""))
+                    self._errors["base"] = "服务器参数不正确，返回的值提示服务器不正确。" + status.get("error","")
                     return await self._show_config_form(user_input)
                 
                 try:
                     json_data = json.loads(password) 
                 except (SyntaxError, TypeError, KeyError) as e:
                     _LOGGER.error("填写的json数据解析错误: %s", repr(e))
-                    return
-                
+                    self._errors["base"] = "填写的json数据解析错误。"
+                    return await self._show_config_form(user_input)
+                if not isinstance(json_data, list):
+                    self._errors["base"] = "填写的json数据格式不正确。"
+                    return await self._show_config_form(user_input)
                 
                 if isinstance(json_data, list):
                     for deviceslist in json_data:
@@ -575,6 +602,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     self._errors["base"] = "communication"
+                    return await self._show_config_form(user_input)
             else:
                 self._errors["base"] = "未选择有效平台"
 
