@@ -72,7 +72,31 @@ class DataFetcher:
         self.address = {}
         self.lastseentime = 0
         self._refresh_time = 0
-        
+        self.all_device_configs = []
+        try:
+            jsontext = json.loads(self.password)
+        except json.JSONDecodeError as e:
+            _LOGGER.error("Failed to parse self.password JSON: %s", e)
+            
+        # 处理设备配置
+        device = jsontext[0]
+        for device in jsontext:
+            if "hashedAdvKey" not in device or "additionalHashedAdvKeys" not in device:
+                # 计算主私钥的 hashedAdvKey
+                main_private_key = device["privateKey"]
+                device["hashedAdvKey"] = self.calculate_hashed_adv_key(main_private_key)
+
+                # 计算 additionalHashedAdvKeys
+                additional_hashed_keys = []
+                for priv_key in device["additionalKeys"]:
+                    hashed_key = self.calculate_hashed_adv_key(priv_key)
+                    if hashed_key:
+                        additional_hashed_keys.append(hashed_key)
+                device["additionalHashedAdvKeys"] = additional_hashed_keys
+
+            self.all_device_configs.append(device)
+        _LOGGER.debug("all_device_configs: %s", self.all_device_configs)
+
         # 使用自定义编码器的存储
         self._store = Store(
             hass, 
@@ -94,8 +118,8 @@ class DataFetcher:
             auth_header = self.basic_auth(self.username.split('||')[1], self.username.split('||')[2])
             headers = {"authorization": auth_header}
         
-        p_data = self.json_format_data(self.password)
-        _LOGGER.debug("XXXXXX_devices.json: %s", p_data)
+        p_data = self.json_format_data(self.all_device_configs[0])
+        #_LOGGER.debug("payload: %s", p_data)
         resp = requests.post(url, headers=headers, json=p_data).json()
         _LOGGER.debug("resp_json: %s", resp)
         return resp
@@ -105,44 +129,40 @@ class DataFetcher:
         encoded_credentials = base64.b64encode(userpass.encode('utf-8')).decode('utf-8')
         return "Basic " + encoded_credentials
     
-    def json_format_data(self, input_string):
-        try:
-            data = json.loads(input_string)
-            accessory_id = data[0].get("id")
-            ids = data[0].get("additionalHashedAdvKeys")
-            if not ids:
-                additionalKeys = data[0].get("additionalKeys")
-                additional_hashed_keys = []
-                for priv_key in additionalKeys:
-                    if not priv_key:
-                        continue
-                    try:
-                        # Base64解码 -> SHA256哈希 -> Base64编码
-                        decoded_key = base64.b64decode(priv_key)
-                        hashed = hashlib.sha256(decoded_key).digest()
-                        hashed_b64 = base64.b64encode(hashed).decode('ascii')
-                        additional_hashed_keys.append(hashed_b64)
-                    except Exception as e:
-                        _LOGGER.warning(f"Error processing key {priv_key}: {str(e)}")
-                ids = additional_hashed_keys
-
-            formatted_data = {
-                "accessoryId": accessory_id,
-                "ids": ids,
-                "days": 1
-            }
-
-            return formatted_data
-
-        except (SyntaxError, TypeError, KeyError) as e:
-            _LOGGER.error("填写的json数据解析错误: %s", repr(e))
-            return None    
+    def json_format_data(self, data):
+        accessory_id = data.get("id")
+        ids = data.get("additionalHashedAdvKeys")
+        formatted_data = {
+            "accessoryId": accessory_id,
+            "ids": ids,
+            "days": 1
+        }
+        return formatted_data
     
     def sha256(self, data):
         """SHA256实现，与Dart代码中的_kdf匹配"""
         digest = hashlib.sha256()
         digest.update(data)
         return digest.digest()
+        
+    def calculate_hashed_adv_key(self, private_key_b64):
+        """计算私钥对应的 hashedAdvKey"""
+        try:
+            priv_bytes = base64.b64decode(private_key_b64)
+            priv_int = int.from_bytes(priv_bytes, 'big')
+            private_key = ec.derive_private_key(
+                priv_int, 
+                ec.SECP224R1(),
+                default_backend()
+            )
+            public_key = private_key.public_key()
+            x_coord = public_key.public_numbers().x
+            x_bytes = x_coord.to_bytes(28, 'big')
+            hashed = hashlib.sha256(x_bytes).digest()
+            return base64.b64encode(hashed).decode('ascii')
+        except Exception as e:
+            print(f"Error processing key: {str(e)}")
+            return None
 
     def decode_tag(self, decrypted_data):
         """解码标签数据，与Dart代码中的_decodePayload匹配"""
@@ -408,13 +428,9 @@ class DataFetcher:
             
             if devicesinfodata:
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                try:
-                    all_device_configs = json.loads(self.password)
-                except json.JSONDecodeError as e:
-                    _LOGGER.error("Failed to parse self.password JSON: %s", e)
-                    # 根据实际情况决定是否在此处返回或抛出异常
-                    return 
-                    
+
+                all_device_configs = self.all_device_configs
+ 
                 for imei in self.device_imei:
                     _LOGGER.debug("Processing device with ID (imei): %s", imei)
 
@@ -422,7 +438,7 @@ class DataFetcher:
                         self.trackerdata[imei]["attrs"]["querytime"] = querytime
                     
                     # 找到当前 imei 对应的设备配置
-                    target_device_config = next((d_config for d_config in all_device_configs if d_config.get("id") == imei), None)
+                    target_device_config = next((d_config for d_config in all_device_configs if str(d_config.get("id")) == str(imei)), None)
 
                     if not target_device_config:
                         _LOGGER.debug("No device configuration found in JSON for ID (imei): %s", imei)
@@ -436,40 +452,12 @@ class DataFetcher:
                         main_hashed_key = target_device_config["hashedAdvKey"]
                         main_private_key = target_device_config["privateKey"]
                         
-                    # 兼容 一键airtag.exe 生成的json
-                    elif "privateKey" in target_device_config:
-                        main_private_key = target_device_config["privateKey"]
-                        try:
-                            # Base64解码 -> SHA256哈希 -> Base64编码
-                            decoded_key = base64.b64decode(main_private_key)
-                            hashed = hashlib.sha256(decoded_key).digest()
-                            hashed_b64 = base64.b64encode(hashed).decode('ascii')
-                            main_hashed_key = hashed_b64
-                        except Exception as e:
-                            _LOGGER.warning(f"Error processing key {main_private_key}: {str(e)}")
                     if main_hashed_key and main_private_key:  # 确保值不为空
                         key_map[main_hashed_key] = main_private_key
 
                     # 处理辅助密钥
                     additional_private_keys = target_device_config.get("additionalKeys", [])
-
-                    if "additionalHashedAdvKeys" in target_device_config:
-                        additional_hashed_keys = target_device_config["additionalHashedAdvKeys"]
-
-                    # 兼容 一键airtag.exe 生成的json
-                    else:
-                        additional_hashed_keys = []
-                        for priv_key in additional_private_keys:
-                            if not priv_key:
-                                continue
-                            try:
-                                # Base64解码 -> SHA256哈希 -> Base64编码
-                                decoded_key = base64.b64decode(priv_key)
-                                hashed = hashlib.sha256(decoded_key).digest()
-                                hashed_b64 = base64.b64encode(hashed).decode('ascii')
-                                additional_hashed_keys.append(hashed_b64)
-                            except Exception as e:
-                                _LOGGER.warning(f"Error processing key {priv_key}: {str(e)}")
+                    additional_hashed_keys = target_device_config["additionalHashedAdvKeys"]
 
                     if len(additional_hashed_keys) == len(additional_private_keys):
                         for i in range(len(additional_hashed_keys)):
@@ -582,6 +570,3 @@ class DataFetcher:
         
 class GetDataError(Exception):
     """request error or response data is unexpected"""                
-            
-            
-            
