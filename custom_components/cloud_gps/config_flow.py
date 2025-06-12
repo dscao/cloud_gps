@@ -575,8 +575,8 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 try:
                     json_data = json.loads(password) 
-                except (SyntaxError, TypeError, KeyError) as e:
-                    _LOGGER.error("填写的json数据解析错误: %s", repr(e))
+                except:
+                    _LOGGER.error("填写的json数据解析错误")
                     self._errors["base"] = "填写的json数据解析错误。"
                     return await self._show_config_form(user_input)
                 if not isinstance(json_data, list):
