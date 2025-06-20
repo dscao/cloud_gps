@@ -95,7 +95,7 @@ class DataFetcher:
                 device["additionalHashedAdvKeys"] = additional_hashed_keys
 
             self.all_device_configs.append(device)
-        _LOGGER.debug("all_device_configs: %s", self.all_device_configs)
+        _LOGGER.debug("all_device_configs(请勿公开): %s", self.all_device_configs)
 
         # 使用自定义编码器的存储
         self._store = Store(
