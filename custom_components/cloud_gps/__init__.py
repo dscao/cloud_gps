@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-11
+LastEditTime  : 2025-6-15
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -79,7 +79,7 @@ from .const import (
 )
 
 TYPE_GEOFENCE = "Geofence"
-__version__ = '2025.6.11'
+__version__ = '2025.6.22'
 
 _LOGGER = logging.getLogger(__name__)
     
@@ -102,6 +102,7 @@ PLATFORM_MODULE_MAP = {
     "hellobike.com": "hellobike_data_fetcher",
     "auto.amap.com": "autoamap_data_fetcher",
     "macless_haystack": "macless_haystack_data_fetcher",
+    "gps_mqtt": "gps_mqtt_data_fetcher",
 }
 
    
@@ -118,7 +119,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhost = entry.data[CONF_WEB_HOST]
     gps_conver = entry.options.get(CONF_GPS_CONVER, ["wgs84"])
     device_imei = entry.options.get(CONF_DEVICE_IMEI, [])
-    update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, 60)
+    update_interval_seconds = entry.options.get(CONF_UPDATE_INTERVAL, 300 if webhost == "macless_haystack" else 60 )
     attr_show = entry.options.get(CONF_ATTR_SHOW, True)
     address_distance = entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50)
     addressapi = entry.options.get(CONF_ADDRESSAPI, "none")
@@ -156,7 +157,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             cancel_timer = async_track_time_interval(
                 hass,
                 check_data_and_create_entities,
-                datetime.timedelta(seconds=30),
+                datetime.timedelta(seconds=60),
             )
 
             # 将取消函数注册到卸载事件中，以确保在卸载集成时停止定时器
@@ -248,12 +249,14 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         
         self._entity_created = False
         self._retry_count = 0
+        
+        self.timeout_second = 120 if webhost == "macless_haystack" or webhost == "gps_mqtt" else 30
 
 
     async def _async_update_data(self):
         """Update data via library."""  
         try:
-            async with timeout(20):
+            async with timeout(self.timeout_second):
                 data = await self._fetcher.get_data()
                 _LOGGER.debug("%s update_data: %s", self.device_imei, data)                
                 _LOGGER.debug("%s gps_conver: %s", self.device_imei, self._gps_conver)
@@ -314,7 +317,7 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         
     async def _get_address_frome_api(self, imei, addressapi, api_key, private_key):
         try:
-            async with timeout(5):
+            async with timeout(10):
                 if addressapi == "baidu" and api_key:
                     _LOGGER.debug("baidu:"+api_key)
                     addressdata = await self._hass.async_add_executor_job(self.get_baidu_geocoding, self._coords[imei][1], self._coords[imei][0], api_key, private_key)

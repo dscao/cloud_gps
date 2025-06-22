@@ -105,6 +105,8 @@ class CloudGPSSwitchEntity(SwitchEntity):
             from .tuqiang123_data_fetcher import DataSwitch
         elif webhost == "hellobike.com":
             from .hellobike_data_fetcher import DataSwitch
+        elif webhost == "gps_mqtt":
+            from .gps_mqtt_data_fetcher import DataSwitch
         else:
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
@@ -184,7 +186,7 @@ class CloudGPSSwitchEntity(SwitchEntity):
                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("defence")== "已设防"
                 elif self.entity_description.key == "defencemod":
                     _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
-                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已"
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已开锁"
                     
             elif self._webhost == "tuqiang123.com":
                 if self.entity_description.key == "defence":
@@ -193,6 +195,10 @@ class CloudGPSSwitchEntity(SwitchEntity):
                 elif self.entity_description.key == "defencemode":
                     _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc")== "已启动"
+            elif self._webhost == "gps_mqtt":
+                if self.entity_description.key == "open_lock":
+                    _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
+                    self._is_on = self.coordinator.data[self._imei]["attrs"].get("In1")== 1
                     
         self._doing = False
     

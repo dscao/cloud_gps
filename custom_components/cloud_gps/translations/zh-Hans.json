@@ -82,7 +82,8 @@
         "buttons": {
 			"options": {
 				"bell": "鸣笛寻车",
-                "nowtrack": "立即定位"
+                "nowtrack": "立即定位",
+                "reboot": "重启设备"
 			}
 		},
         "addressapi": {

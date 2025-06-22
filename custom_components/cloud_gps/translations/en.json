@@ -82,7 +82,8 @@
         "buttons": {
 			"options": {
 				"bell": "bell",
-                "nowtrack": "now track"
+                "nowtrack": "now track",
+                "reboot": "reboot"
 			}
 		},
         "addressapi": {

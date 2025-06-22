@@ -7,6 +7,7 @@ import requests
 import re
 import hashlib
 import base64
+import paho.mqtt.client as mqtt
 import homeassistant.helpers.config_validation as cv
 from homeassistant.const import CONF_NAME, CONF_USERNAME, CONF_PASSWORD, CONF_CLIENT_ID
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
@@ -60,7 +61,8 @@ WEBHOST = {
     "cmobd.com": "中移行车卫士（*密码填写token）",    
     "hellobike.com": "哈啰智能芯（*密码填写token）",
     "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
-    "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）"
+    "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）",
+    "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password，密码填写mqtt主题）"
 }
 
 API_HOST_TUQIANG123 = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com
@@ -286,6 +288,60 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         userpass = f"{username}:{password}"
         encoded_credentials = base64.b64encode(userpass.encode('utf-8')).decode('utf-8')
         return "Basic " + encoded_credentials
+        
+    def test_mqtt_connection(self, server, port, username, password):
+        """测试 MQTT 服务器连接"""
+        result = {"success": False, "error": ""}
+        connected = False
+        
+        def on_connect(client, userdata, flags, rc):
+            nonlocal connected
+            if rc == 0:
+                connected = True
+            else:
+                result["error"] = f"Connection failed with code {rc}"
+        
+        client = mqtt.Client()
+        client.on_connect = on_connect
+        
+        if username and password:
+            client.username_pw_set(username, password)
+        
+        try:
+            client.connect(server, port, 5)  # 5秒连接超时
+            client.loop_start()  # 启动网络循环（非阻塞）
+            
+            # 等待连接结果，最多5秒
+            for _ in range(10):
+                if connected:
+                    result["success"] = True
+                    break
+                time.sleep(0.5)
+            else:
+                if not result["error"]:
+                    result["error"] = "Connection timed out"
+        except Exception as e:
+            result["error"] = str(e)
+        finally:
+            try:
+                client.loop_stop()
+                client.disconnect()
+            except:
+                pass
+        
+        return result
+        
+    def parse_mqtt_server(self, server_str):
+        """解析 MQTT 服务器地址，支持 host:port 格式"""
+        if ":" in server_str:
+            parts = server_str.split(":")
+            host = parts[0]
+            try:
+                port = int(parts[1])
+            except ValueError:
+                port = 1883
+            return host, port
+        return server_str, 1883
             
     async def async_step_user(self, user_input={}):
         self._errors = {}
@@ -574,13 +630,13 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     return await self._show_config_form(user_input)
                 
                 try:
-                    json_data = json.loads(password) 
+                    json_data = json.loads(password)
                 except:
-                    _LOGGER.error("填写的json数据解析错误")
-                    self._errors["base"] = "填写的json数据解析错误。"
+                    _LOGGER.error("密码中填写的json数据解析错误")
+                    self._errors["base"] = "密码中填写的json数据解析错误。"
                     return await self._show_config_form(user_input)
                 if not isinstance(json_data, list):
-                    self._errors["base"] = "填写的json数据格式不正确。"
+                    self._errors["base"] = "密码中填写的json数据格式不正确。"
                     return await self._show_config_form(user_input)
                 
                 if isinstance(json_data, list):
@@ -600,9 +656,64 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_create_entry(
                         title=user_input[CONF_NAME], data=config_data
                     )
-                else:
-                    self._errors["base"] = "communication"
+            elif webhost=="gps_mqtt":
+                # 确保用户名格式正确
+                if "||" not in username:
+                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password 格式")
+                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password 格式"
                     return await self._show_config_form(user_input)
+                
+                parts = username.split("||")
+                if len(parts) < 3:
+                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password 格式")
+                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password 格式"
+                    return await self._show_config_form(user_input)
+                
+                server_str = parts[0]
+                mqtt_username = parts[1]
+                mqtt_password = parts[2]
+                
+                # 解析服务器地址和端口
+                server, port = await self.hass.async_add_executor_job(
+                    self.parse_mqtt_server, server_str
+                )
+                
+                # 测试 MQTT 连接
+                connection_test = await self.hass.async_add_executor_job(
+                    self.test_mqtt_connection,
+                    server,
+                    port,
+                    mqtt_username,
+                    mqtt_password
+                )
+                
+                if not connection_test["success"]:
+                    _LOGGER.error("MQTT 连接失败: %s", connection_test["error"])
+                    self._errors["base"] = f"MQTT 连接失败: {connection_test['error']}"
+                    return await self._show_config_form(user_input)
+                
+                # 验证主题格式
+                topic = user_input[CONF_PASSWORD]
+                if not topic or not topic.strip():
+                    self._errors["base"] = "主题不能为空"
+                    return await self._show_config_form(user_input)
+                    
+                devices.append(topic)
+                
+                await self.async_set_unique_id(f"cloudpgs-{server}-{user_input[CONF_PASSWORD]}".replace(".","_").replace("/","_"))
+                self._abort_if_unique_id_configured()
+                
+                config_data[CONF_USERNAME] = username
+                config_data[CONF_PASSWORD] = password
+                config_data[CONF_DEVICES] = devices
+                config_data[CONF_WEB_HOST] = webhost
+                
+                _LOGGER.debug(devices)
+                    
+                return self.async_create_entry(
+                        title=user_input[CONF_NAME], data=config_data
+                    )
+
             else:
                 self._errors["base"] = "未选择有效平台"
 
@@ -755,6 +866,25 @@ class OptionsFlow(config_entries.OptionsFlow):
             
             SWITCHSLIST = []            
             BUTTONSLIST = []
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "gps_mqtt":
+            SENSORSLIST = [
+                {"value": KEY_PARKING_TIME, "label": "parkingtime"},
+                {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
+                {"value": KEY_ADDRESS, "label": "address"},
+                {"value": KEY_SPEED, "label": "speed"},
+                {"value": KEY_TOTALKM, "label": "totalkm"},
+                {"value": KEY_STATUS, "label": "status"},
+                {"value": KEY_ACC, "label": "acc"},
+                {"value": KEY_BATTERY, "label": "powbattery"}
+            ]
+            
+            SWITCHSLIST = [
+                {"value": "open_lock", "label": "open_lock"},
+            ]            
+            BUTTONSLIST = [
+                {"value": "nowtrack", "label": "nowtrack"},
+                {"value": "reboot", "label": "reboot"}
+            ]
         else:
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},

@@ -69,7 +69,6 @@ class DataFetcher:
         self.usertype = None
         self.deviceinfo = {}
         self.trackerdata = {}
-        self.address = {}
         self.lastseentime = 0
         self._refresh_time = 0
         self.all_device_configs = []
@@ -95,7 +94,7 @@ class DataFetcher:
                 device["additionalHashedAdvKeys"] = additional_hashed_keys
 
             self.all_device_configs.append(device)
-        _LOGGER.debug("all_device_configs(请勿公开): %s", self.all_device_configs)
+        _LOGGER.debug("all_device_configs: %s", self.all_device_configs)
 
         # 使用自定义编码器的存储
         self._store = Store(
@@ -409,7 +408,7 @@ class DataFetcher:
         if (int(datetime.datetime.now().timestamp()) - int(self._refresh_time)) >= 60: #限制最快1分钟才请求一次
             devicesinfodata = None
             try:
-                async with timeout(20): 
+                async with timeout(60): 
                     devicesinfodata = await self.hass.async_add_executor_job(self._get_devices_info)
                     
             except Exception as e:
@@ -570,3 +569,6 @@ class DataFetcher:
         
 class GetDataError(Exception):
     """request error or response data is unexpected"""                
+            
+            
+            

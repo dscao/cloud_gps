@@ -43,6 +43,12 @@ BUTTON_TYPES = {
         "name": "nowtrack",
         "icon": "mdi:map-marker-check",
         "device_class": "restart",
+    },
+    "reboot": {
+        "label": "reboot",
+        "name": "reboot",
+        "icon": "mdi:restart",
+        "device_class": "restart",
     }
 }
 
@@ -94,6 +100,8 @@ class CloudGPSButtonEntity(ButtonEntity):
             from .tuqiang123_data_fetcher import DataButton
         elif webhost == "hellobike.com":
             from .hellobike_data_fetcher import DataButton
+        elif webhost == "gps_mqtt":
+            from .gps_mqtt_data_fetcher import DataButton
         else:
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
@@ -149,6 +157,10 @@ class CloudGPSButtonEntity(ButtonEntity):
             self._state = await self._button._action("rent.order.bell")
         elif self._webhost == "tuqiang123.com" and self._description['label']=="nowtrack":
             self._state = await self._button._action("立即定位")
+        elif self._webhost == "gps_mqtt" and self._description['label']=="nowtrack":
+            self._state = await self._button._action({"cmd":"dw"})
+        elif self._webhost == "gps_mqtt" and self._description['label']=="reboot":
+            self._state = await self._button._action({"cmd":"reboot"})
         
 
     async def async_added_to_hass(self):
