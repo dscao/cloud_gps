@@ -27,6 +27,9 @@ macless-haystack 部署服务方法：https://gitee.com/lovelyelfpop/macless-hay
 
 中移行车卫士参数从小程序中抓包。
 
+银尔达mqtt方式后台任务代码参考： https://bbs.hassbian.com/forum.php?mod=redirect&goto=findpost&ptid=27190&pid=664217
+
+
 车辆状态属性或实体值为： 离线 -- [断电] -- 行驶 -- [钥匙开启]-- [震动]--停车，优先级依次降低。 [] 表示不支持的则不会出现。
 
 ![11](https://github.com/dscao/cloud_gps/assets/16587914/fb3d9a8b-b7f3-48ea-92be-a37c72b62c41)
