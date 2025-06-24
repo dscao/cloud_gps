@@ -245,6 +245,10 @@ class DataFetcher:
             except Exception as e:
                 _LOGGER.error("Reconnect attempt failed: %s", e)
 
+    async def start(self):
+        """启动 MQTT 连接"""
+        await self.connect_mqtt()
+        
     async def stop(self):
         """停止 MQTT 连接"""
         self._stopped = True
@@ -385,9 +389,7 @@ class DataFetcher:
             elif payload[key] is not None:
                 self.state_history[imei][key] = payload[key]
         
-        # 更新经纬度
-        self.state_history[imei]["latitude"] = self.state_history[imei]["gps"]["lat"]
-        self.state_history[imei]["longitude"] = self.state_history[imei]["gps"]["lng"]
+        
         
         # 获取当前 GPS 数据
         longitude = float(self.state_history[imei]["gps"]["lng"])
@@ -396,8 +398,8 @@ class DataFetcher:
         course = float(self.state_history[imei]["gps"]["course"])
 
         # 计算与上次位置的距离
-        last_lat = self.state_history[imei]["latitude"]
-        last_lng = self.state_history[imei]["longitude"]
+        last_lat = self.state_history[imei].get("latitude")
+        last_lng = self.state_history[imei].get("longitude")
         self.server_distance = self.get_distance(
             latitude, longitude,
             last_lat, last_lng
@@ -407,9 +409,16 @@ class DataFetcher:
         runorstop = "停止"
         if speed < MIN_SPEED_FOR_MOVEMENT and self.state_history[imei].get("s", 0) == 0:
             runorstop = "停止"
+            # 更新当前运动状态
+            self.state_history[imei]["runorstop"] = runorstop
             speed = 0
         elif self.server_distance > MIN_DISTANCE_FOR_MOVEMENT and self.state_history[imei].get("s", 0) == 1:
             runorstop = "运动"
+            # 更新当前运动状态
+            self.state_history[imei]["runorstop"] = runorstop
+            # 更新经纬度
+            self.state_history[imei]["latitude"] = self.state_history[imei]["gps"]["lat"]
+            self.state_history[imei]["longitude"] = self.state_history[imei]["gps"]["lng"]
             # 更新总里程
             self.state_history[imei]["totalkm"] += self.server_distance / 1000
         
@@ -425,8 +434,6 @@ class DataFetcher:
             self.state_history[imei]["old_ol"] = 0
             self.state_history[imei]["lastofflinetime"] = datetime.datetime.now()
         
-        # 更新当前运动状态
-        self.state_history[imei]["runorstop"] = runorstop
         
         # 更新最后更新时间
         self.state_history[imei]["lastupdate"] = datetime.datetime.now()
@@ -449,9 +456,8 @@ class DataFetcher:
                 _LOGGER.debug("No state data for device: %s", imei)
                 continue
                 
-            gps_data = device_state.get("gps", {})
-            thislat = gps_data.get("lat", 0)
-            thislon = gps_data.get("lng", 0)
+            thislat = device_state.get("latitude",0)
+            thislon = device_state.get("longitude",0)
             accuracy = 0
             
             # 计算停车时间
@@ -551,14 +557,6 @@ class DataFetcher:
             }
         return self.trackerdata
 
-    # ======================== 生命周期管理 ========================
-    async def start(self):
-        """启动 MQTT 连接"""
-        await self.connect_mqtt()
-
-    async def stop(self):
-        """停止 MQTT 连接"""
-        await self.mqtt_manager.disconnect()
             
             
 class DataButton:
