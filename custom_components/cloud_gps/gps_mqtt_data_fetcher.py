@@ -409,13 +409,10 @@ class DataFetcher:
         runorstop = "停止"
         if speed < MIN_SPEED_FOR_MOVEMENT and self.state_history[imei].get("s", 0) == 0:
             runorstop = "停止"
-            # 更新当前运动状态
-            self.state_history[imei]["runorstop"] = runorstop
+
             speed = 0
         elif self.server_distance > MIN_DISTANCE_FOR_MOVEMENT and self.state_history[imei].get("s", 0) == 1:
             runorstop = "运动"
-            # 更新当前运动状态
-            self.state_history[imei]["runorstop"] = runorstop
             # 更新经纬度
             self.state_history[imei]["latitude"] = self.state_history[imei]["gps"]["lat"]
             self.state_history[imei]["longitude"] = self.state_history[imei]["gps"]["lng"]
@@ -434,7 +431,9 @@ class DataFetcher:
             self.state_history[imei]["old_ol"] = 0
             self.state_history[imei]["lastofflinetime"] = datetime.datetime.now()
         
-        
+        # 更新当前运动状态
+        self.state_history[imei]["runorstop"] = runorstop
+            
         # 更新最后更新时间
         self.state_history[imei]["lastupdate"] = datetime.datetime.now()
         
