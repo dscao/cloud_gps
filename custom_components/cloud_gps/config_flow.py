@@ -30,6 +30,7 @@ from .const import (
     KEY_QUERYTIME,
     KEY_PARKING_TIME,
     KEY_LASTSTOPTIME,
+    KEY_LASTRUNTIME,
     KEY_LASTSEEN,
     KEY_ADDRESS,
     KEY_SPEED,
@@ -38,6 +39,8 @@ from .const import (
     KEY_ACC,
     KEY_BATTERY,
     KEY_BATTERY_STATUS,
+    KEY_RUNORSTOP,
+    KEY_SHAKE,
     CONF_UPDATE_ADDRESSDISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
@@ -700,7 +703,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     
                 devices.append(topic)
                 
-                await self.async_set_unique_id(f"cloudpgs-{server}-{user_input[CONF_PASSWORD]}".replace(".","_").replace("/","_"))
+                await self.async_set_unique_id(f"cloudpgs-{server}-{user_input[CONF_PASSWORD]}".replace(".","_").replace("/","_").replace(" ",""))
                 self._abort_if_unique_id_configured()
                 
                 config_data[CONF_USERNAME] = username
@@ -849,6 +852,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
+                {"value": KEY_LASTRUNTIME, "label": "lastruntime"},
                 {"value": KEY_SPEED, "label": "speed"},
                 {"value": KEY_ADDRESS, "label": "address"},
                 {"value": KEY_STATUS, "label": "status"},
@@ -870,11 +874,14 @@ class OptionsFlow(config_entries.OptionsFlow):
             SENSORSLIST = [
                 {"value": KEY_PARKING_TIME, "label": "parkingtime"},
                 {"value": KEY_LASTSTOPTIME, "label": "laststoptime"},
+                {"value": KEY_LASTRUNTIME, "label": "lastruntime"},
                 {"value": KEY_ADDRESS, "label": "address"},
                 {"value": KEY_SPEED, "label": "speed"},
                 {"value": KEY_TOTALKM, "label": "totalkm"},
                 {"value": KEY_STATUS, "label": "status"},
                 {"value": KEY_ACC, "label": "acc"},
+                {"value": KEY_RUNORSTOP, "label": "runorstop"},
+                {"value": KEY_SHAKE, "label": "shake"},
                 {"value": KEY_BATTERY, "label": "powbattery"}
             ]
             
@@ -984,7 +991,6 @@ class OptionsFlow(config_entries.OptionsFlow):
                         SelectSelectorConfig(
                             options=[
                                 {"value": "none", "label": "none"},
-                                #{"value": "free", "label": "free"}, #百度免api接口已关闭
                                 {"value": "gaode", "label": "gaode"},
                                 {"value": "baidu", "label": "baidu"},
                                 {"value": "tencent", "label": "tencent"}

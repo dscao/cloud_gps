@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2025.5.29"
+VERSION = "2025.6.27"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
@@ -55,17 +55,22 @@ CONF_WITH_MAP_CARD = "with_map_card"
 COORDINATOR = "coordinator"
 UNDO_UPDATE_LISTENER = "undo_update_listener"
 
+MQTT_MANAGER = "mqtt_manager"
+
 PWD_NOT_CHANGED = "__**password_not_changed**__"
 
 KEY_ADDRESS = "address"
 KEY_QUERYTIME = "querytime"
 KEY_PARKING_TIME = "parkingtime"
 KEY_LASTSTOPTIME = "laststoptime"
+KEY_LASTRUNTIME = "lastruntime"
 KEY_LASTSEEN = "lastseen"
 KEY_SPEED = "speed"
 KEY_TOTALKM = "totalkm"
 KEY_STATUS = "status"
 KEY_ACC = "acc"
+KEY_RUNORSTOP = "runorstop"
+KEY_SHAKE = "shake"
 KEY_BATTERY = "powbattery"
 KEY_BATTERY_STATUS = "battery_status"
 

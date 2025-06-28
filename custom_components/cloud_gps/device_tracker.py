@@ -11,6 +11,7 @@ from aiohttp.client_exceptions import ClientConnectorError
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.core import callback
 from .helper import gcj02towgs84, wgs84togcj02, gcj02_to_bd09
 
 from homeassistant.const import (
@@ -135,11 +136,16 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
         attrs = super().state_attributes
         attrs.update(self._attrs)
         return attrs
-
+        
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_update()
 
     async def async_added_to_hass(self):
         """Connect to dispatcher and restore state."""
         await super().async_added_to_hass()
+
         # 恢复之前保存的状态
         if (last_state := await self.async_get_last_state()) is not None:
             # 仅当协调器尚未提供数据时才恢复状态
@@ -168,6 +174,7 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
         _LOGGER.debug("刷新device_tracker数据: %s %s %s", datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.coordinator.data.get(self._imei) )
         #await self.coordinator.async_request_refresh()
         self._load_state()
+        self.async_write_ha_state()
     
     def _load_state(self):
         data = self.coordinator.data.get(self._imei)
@@ -210,3 +217,4 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
             if not hasattr(self, '_state_restored'):
                 _LOGGER.debug("No data available for %s, will try to restore state later", self._imei)
                 
+

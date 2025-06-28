@@ -159,14 +159,13 @@ class DataFetcher:
         try:
             async with timeout(10): 
                 devicesinfodata =  await self.hass.async_add_executor_job(self._get_devices_info)
+                _LOGGER.debug("高德机车 %s 最终数据结果: %s", self.device_imei, devicesinfodata)
         except ClientConnectorError as error:
             _LOGGER.error("高德机车 %s 连接错误: %s", self.device_imei, error)
         except asyncio.TimeoutError:
             _LOGGER.error("高德机车 %s 获取数据超时 (10秒)", self.device_imei)
         except Exception as e:
             _LOGGER.error("高德机车 %s 未知错误: %s", self.device_imei, repr(e))
-        finally:
-            _LOGGER.debug("高德机车 %s 最终数据结果: %s", self.device_imei, devicesinfodata)
                 
         for imei in self.device_imei:
             _LOGGER.debug("get info imei: %s", imei)
@@ -198,6 +197,9 @@ class DataFetcher:
                         self.vardata[imei]["runorstop"] = "run"
                         self.vardata[imei]["lastlat"] = thislat
                         self.vardata[imei]["lastlon"] = thislon
+                        if self.vardata[imei].get("runorstop","run") == "stop":
+                            _LOGGER.debug("变成运动: %s ,%s", thislat,thislon)
+                            self.vardata[imei]["lastruntime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                     elif self.vardata[imei].get("runorstop","run") == "run":
                         _LOGGER.debug("变成静止: %s ,%s", thislat,thislon)
@@ -231,6 +233,7 @@ class DataFetcher:
                     lastonlinetime = self.vardata[imei].get("lastonlinetime","")
                     onlinestatus = self.vardata[imei].get("isonline","离线")
                     laststoptime = self.vardata[imei].get("laststoptime","")
+                    lastruntime = self.vardata[imei].get("lastruntime","")
                     runorstop =  self.vardata[imei].get("runorstop","运动")
                     speed =  self.vardata[imei].get("speed",0)
                     course =  self.vardata[imei].get("course",0)
@@ -247,6 +250,7 @@ class DataFetcher:
                         "course": course,
                         "distance": distance,
                         "runorstop": runorstop,
+                        "lastruntime": lastruntime,
                         "laststoptime": laststoptime,
                         "parkingtime": parkingtime,
                         "naviStatus": naviStatus,

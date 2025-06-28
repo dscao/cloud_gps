@@ -68,6 +68,8 @@
                 "totalkm": "总里程",
                 "status": "状态",
                 "acc": "ACC状态",
+                "runorstop": "运动状态",
+                "shake": "震动状态",
                 "battery_status": "电池状态",
                 "powbattery": "电池电压"
 			}
@@ -173,6 +175,9 @@
                     "defence": {
 					  "name": "设防状态"
 					},
+                    "shake": {
+					  "name": "震动状态"
+					},
                     "powerStatus": {
 					  "name": "电源"
 					},
@@ -272,6 +277,22 @@
 			},
 			"acc": {
 				"name": "ACC状态",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "runorstop": {
+				"name": "运动状态",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "shake": {
+				"name": "震动状态",
 				"state_attributes": {
 					"querytime": {
 					  "name": "查询时间"

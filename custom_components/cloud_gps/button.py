@@ -24,6 +24,7 @@ from .const import (
     DOMAIN,
     CONF_WEB_HOST,
     CONF_BUTTONS,
+    MQTT_MANAGER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,7 +72,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         buttons = []
         for button_type in enabled_buttons:
             _LOGGER.debug("button_type: %s" ,button_type)
-            buttons.append(CloudGPSButtonEntity(hass, webhost, username, password, coordinatordata, BUTTON_TYPES[button_type], coordinator))
+            mqtt_manager = hass.data[DOMAIN][config_entry.entry_id].get(MQTT_MANAGER)
+            buttons.append(CloudGPSButtonEntity(hass, webhost, username, password, coordinatordata, BUTTON_TYPES[button_type], coordinator, mqtt_manager))
             
         async_add_entities(buttons, False)            
 
@@ -80,7 +82,7 @@ class CloudGPSButtonEntity(ButtonEntity):
     """Define an button entity."""
     _attr_has_entity_name = True
     
-    def __init__(self, hass, webhost, username, password, imei, description, coordinator):
+    def __init__(self, hass, webhost, username, password, imei, description, coordinator, mqtt_manager=None):
         """Initialize."""
         super().__init__()
         self._attr_icon = description['icon']
@@ -105,8 +107,11 @@ class CloudGPSButtonEntity(ButtonEntity):
         else:
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
-        
-        self._button = DataButton(hass, username, password, imei)
+            
+        if webhost == "gps_mqtt":
+            self._button = DataButton(hass, username, password, imei, mqtt_manager)
+        else:
+            self._button = DataButton(hass, username, password, imei)
         
 
     @property

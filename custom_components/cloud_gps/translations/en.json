@@ -68,6 +68,8 @@
                 "totalkm": "Total Mileage",
                 "status": "Status",
                 "acc": "ACC Status",
+                "runorstop": "runorstop",
+                "shake": "shake",
                 "battery_status": "Battery Status",
                 "powbattery": "Battery Voltage"
 			}
@@ -173,6 +175,9 @@
                     "defence": {
 					  "name": "defence"
 					},
+                    "shake": {
+					  "name": "震动状态"
+					},
                     "powerStatus": {
 					  "name": "Power Status"
 					},
@@ -272,6 +277,22 @@
 			},
 			"acc": {
 				"name": "ACC",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "runorstop": {
+				"name": "RunorStop",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "shake": {
+				"name": "Shake",
 				"state_attributes": {
 					"querytime": {
 					  "name": "Query Time"

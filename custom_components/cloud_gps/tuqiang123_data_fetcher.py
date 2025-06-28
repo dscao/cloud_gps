@@ -161,11 +161,11 @@ class DataFetcher:
             try:
                 async with timeout(10): 
                     data =  await self.hass.async_add_executor_job(self._get_device_tracker, imei)
-                    _LOGGER.debug("最终数据结果: %s", data)
+                    _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
             except ClientConnectorError as error:
-                _LOGGER.error("连接错误: %s", error)
+                _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
             except asyncio.TimeoutError:
-                _LOGGER.error("获取数据超时 (10秒)")
+                _LOGGER.error("途强在线 %s 获取数据超时 (10秒)", imei)
             except Exception as e:
                 await self.hass.async_add_executor_job(self._login, self.username, self.password)
                 raise UpdateFailed(e)

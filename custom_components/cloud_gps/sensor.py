@@ -21,6 +21,7 @@ from .const import (
     CONF_SENSORS,
     KEY_ADDRESS,
     KEY_LASTSTOPTIME,
+    KEY_LASTRUNTIME,
     KEY_LASTSEEN,
     KEY_PARKING_TIME,
     KEY_SPEED,
@@ -29,6 +30,8 @@ from .const import (
     KEY_ACC,
     KEY_BATTERY,
     KEY_BATTERY_STATUS,
+    KEY_RUNORSTOP,
+    KEY_SHAKE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +51,11 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key=KEY_LASTSTOPTIME,
         name="laststoptime",
         icon="mdi:timer-stop"
+    ),
+    SensorEntityDescription(
+        key=KEY_LASTRUNTIME,
+        name="lastruntime",
+        icon="mdi:timer-star"
     ),
     SensorEntityDescription(
         key=KEY_SPEED,
@@ -70,6 +78,16 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key=KEY_ACC,
         name="acc",
         icon="mdi:engine"
+    ),
+    SensorEntityDescription(
+        key=KEY_RUNORSTOP,
+        name="runorstop",
+        icon="mdi:run"
+    ),
+    SensorEntityDescription(
+        key=KEY_SHAKE,
+        name="shake",
+        icon="mdi:vibrate"
     ),
     SensorEntityDescription(
         key=KEY_BATTERY,
@@ -184,18 +202,29 @@ class CloudGPSSensorEntity(CoordinatorEntity):
     @property
     def state_attributes(self): 
         return self._attrs
+        
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_update()
     
     async def async_added_to_hass(self):
         """Call when entity about to be added to hass."""
         self.async_on_remove(
             self.coordinator.async_add_listener(self.async_write_ha_state)
         )
+        
+        if self.coordinator.data.get(self._imei):
+            self._load_state()
+            self.async_write_ha_state()
 
 
     async def async_update(self):
         """Update sensor entity."""
-        _LOGGER.debug("Refreshing sensor data")
+        _LOGGER.debug("%s Refreshing sensor data: %s", self._imei, self.entity_description.key)
+        #await self.coordinator.async_request_refresh()
         self._load_state()
+        self.async_write_ha_state()
 
     def _load_state(self):
         """Load state from the coordinator data."""
@@ -206,6 +235,8 @@ class CloudGPSSensorEntity(CoordinatorEntity):
                 self._state = attrs.get("parkingtime")
             elif self.entity_description.key == "laststoptime":
                 self._state = attrs.get("laststoptime")
+            elif self.entity_description.key == "lastruntime":
+                self._state = attrs.get("lastruntime")
             elif self.entity_description.key == "lastseen":
                 self._state = attrs.get("lastseen")
             elif self.entity_description.key == "address":
@@ -213,9 +244,13 @@ class CloudGPSSensorEntity(CoordinatorEntity):
             elif self.entity_description.key == "speed":
                 self._state = float(attrs.get("speed", 0))
             elif self.entity_description.key == "totalkm":
-                self._state = float(attrs.get("totalKm", 0))
+                self._state = round(float(attrs.get("totalKm", 0)),2)
             elif self.entity_description.key == "acc":
                 self._state = attrs.get("acc")
+            elif self.entity_description.key == "runorstop":
+                self._state = attrs.get("runorstop")
+            elif self.entity_description.key == "shake":
+                self._state = attrs.get("shake")
             elif self.entity_description.key == "powbattery":
                 self._state = float(attrs.get("powbatteryvoltage", 0))
             elif self.entity_description.key == "battery_status":

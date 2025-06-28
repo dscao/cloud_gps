@@ -23,6 +23,7 @@ from .const import (
     DOMAIN,
     CONF_WEB_HOST,
     CONF_SWITCHS,
+    MQTT_MANAGER,
 )
 
 
@@ -72,9 +73,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         _LOGGER.debug(coordinatordata)
     
         switchs = []
+
         for switch_type in enabled_switchs:
             _LOGGER.debug("switch_type: %s" ,switch_type)
-            switchs.append(CloudGPSSwitchEntity(hass, webhost, username, password, coordinatordata, SWITCH_TYPES_MAP[switch_type], coordinator))
+            mqtt_manager = hass.data[DOMAIN][config_entry.entry_id].get(MQTT_MANAGER)
+            switchs.append(CloudGPSSwitchEntity(hass, webhost, username, password, coordinatordata, SWITCH_TYPES_MAP[switch_type], coordinator, mqtt_manager))
             
         async_add_entities(switchs, False)           
             
@@ -83,7 +86,7 @@ class CloudGPSSwitchEntity(SwitchEntity):
     """Define an switch entity."""
     _attr_has_entity_name = True
       
-    def __init__(self, hass, webhost, username, password, imei, description, coordinator):
+    def __init__(self, hass, webhost, username, password, imei, description, coordinator, mqtt_manager=None):
         """Initialize."""
         super().__init__()
         self.entity_description = description
@@ -111,7 +114,10 @@ class CloudGPSSwitchEntity(SwitchEntity):
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
         
-        self._switch = DataSwitch(hass, username, password, imei)
+        if webhost == "gps_mqtt":
+            self._switch = DataSwitch(hass, username, password, imei, mqtt_manager)
+        else:
+            self._switch = DataSwitch(hass, username, password, imei)
         
      
    

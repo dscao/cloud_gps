@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-15
+LastEditTime  : 2025-6-26
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -76,6 +76,7 @@ from .const import (
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
     CONF_UPDATE_INTERVAL,
+    MQTT_MANAGER,
 )
 
 TYPE_GEOFENCE = "Geofence"
@@ -133,11 +134,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (ValueError, ImportError) as e:
         raise ConfigEntryNotReady(str(e))
     data_fetcher_class = module.DataFetcher
+    
+    mqtt_manager = None
+    if webhost == "gps_mqtt":
+        from .gps_mqtt_data_fetcher import SimpleMQTTManager
+        mqtt_manager = SimpleMQTTManager(hass.loop, username, password)
+        # 在这里连接 MQTT，并由 MQTT Manager 内部维护连接状态
+        await mqtt_manager.connect() 
+        
     _LOGGER.debug("%s 集成条目中已启用设备 %s", titlename, device_imei)
     if not device_imei:
         _LOGGER.error("%s 配置中未启用任何设备，请进入配置中设置启用的设备唯一编号。", titlename)
+        # 如果没有设备，也应该清理 MQTT 连接（如果已创建）
+        if mqtt_manager:
+            await mqtt_manager.stop()
+        return False # 或者抛出异常，阻止集成加载
+
     coordinator = CloudDataUpdateCoordinator(
-        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key
+        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key,
+        mqtt_manager # <-- 传递 mqtt_manager
     )
     
     await coordinator.async_refresh()
@@ -170,6 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         COORDINATOR: coordinator,
         UNDO_UPDATE_LISTENER: undo_listener,
+        MQTT_MANAGER: mqtt_manager # <-- 将 mqtt_manager 存储起来
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -188,6 +204,11 @@ async def async_unload_entry(hass, entry):
     )
 
     hass.data[DOMAIN][entry.entry_id][UNDO_UPDATE_LISTENER]()
+
+    mqtt_manager = hass.data[DOMAIN][entry.entry_id].get(MQTT_MANAGER)
+    if mqtt_manager:
+        _LOGGER.info("Stopping MQTT Manager for entry %s", entry.entry_id)
+        await mqtt_manager.stop()
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
@@ -219,11 +240,10 @@ async def async_import_data_fetcher(hass, webhost):
         _LOGGER.error("模块导入失败: %s", e)
         raise
 
-        
 class CloudDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching cloud data API."""
 
-    def __init__(self, hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key):
+    def __init__(self, hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager=None):
         """Initialize."""
         self._hass = hass
         update_interval = (
@@ -245,14 +265,67 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         self._coords = {}
         self._coords_old = {}
         self._address = {}
-        self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key)
+        
+        if mqtt_manager and webhost == "gps_mqtt":
+            self._fetcher = data_fetcher_class(hass, mqtt_manager, device_imei, location_key)
+        else:
+            self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key) 
         
         self._entity_created = False
         self._retry_count = 0
         
         self.timeout_second = 120 if webhost == "macless_haystack" or webhost == "gps_mqtt" else 30
+        
+        # 将协调器的一个方法传递给 DataFetcher，作为 DataFetcher 收到即时更新时的回调
+        if webhost == "gps_mqtt":
+            self._fetcher.set_coordinator_update_callback(self.async_handle_external_update)
+            self._immediate_update_lock = asyncio.Lock()
+            self._last_immediate_update = {imei: 0 for imei in device_imei} # 每次更新都记录时间
 
+    async def async_handle_external_update(self, imei: str, new_device_data: dict):
+        """Handle an immediate update pushed from the data fetcher for a specific device."""
+        _LOGGER.debug(f"Coordinator received immediate update for device: {imei}")
+        async with self._immediate_update_lock:
+            now = time.time()
+            last_update = self._last_immediate_update.get(imei, 0)
 
+            if now - last_update < 1:  
+                _LOGGER.debug(f"Skipping immediate update for {imei} (too frequent). Data already updated in self.data.")
+                # 即使跳过，也要确保 self.data 被最新数据更新
+                # DataFetcher 已经完成了数据处理和准备，Coordinator 只需要将其集成
+                self.data[imei] = new_device_data
+                return
+            
+            self._last_immediate_update[imei] = now
+
+            # 直接更新协调器的数据
+            self.data[imei] = new_device_data
+            
+            if self._gps_conver == "gcj02":
+                self.data[imei]["thislon"], self.data[imei]["thislat"] = gcj02towgs84(self.data[imei]["thislon"], self.data[imei]["thislat"])
+            if self._gps_conver == "bd09":
+                self.data[imei]["thislon"], self.data[imei]["thislat"] = bd09_to_wgs84(self.data[imei]["thislon"], self.data[imei]["thislat"])
+            
+            self._coords[imei] = [self.data[imei]["thislon"], self.data[imei]["thislat"]]
+            _LOGGER.debug("self._coords[%s]: %s", imei, self._coords[imei])
+            
+            if not self._coords_old.get(imei):
+                self._coords_old[imei] = [0, 0]
+                
+            if self._addressapi != "none" and self._addressapi != None:
+                distance = self.get_distance(self._coords[imei][1], self._coords[imei][0], self._coords_old.get(imei)[1], self._coords_old.get(imei)[0])
+                if distance > self._address_distance:
+                    self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
+                    _LOGGER.debug("api_get_address: %s", self._address.get(imei))
+                self.data[imei]["attrs"]["address"] = self._address.get(imei)
+
+            _LOGGER.debug(f"Coordinator updated data for {imei} to: {self.data[imei]}")
+
+            # 通知 Home Assistant 数据已更新，这将触发相关实体的刷新
+            self.async_set_updated_data(self.data)
+            _LOGGER.debug(f"Coordinator async_set_updated_data called for {imei} based on immediate push.")
+
+      
     async def _async_update_data(self):
         """Update data via library."""  
         try:
@@ -314,6 +387,11 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
             self._entity_created = True
             _LOGGER.info("Data now available, triggering entity creation")
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            
+        if not self._entity_created and self.data:
+            self._entity_created = True
+            _LOGGER.info("Data now available, triggering entity creation")
+            self.async_update_listeners() # 告知所有监听器（实体）数据已更新
         
     async def _get_address_frome_api(self, imei, addressapi, api_key, private_key):
         try:
