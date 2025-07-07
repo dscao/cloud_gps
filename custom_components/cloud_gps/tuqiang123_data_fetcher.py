@@ -226,11 +226,20 @@ class DataFetcher:
                 laststoptime = data["gpsTime"]             
                 positionType = data["positionType"] if speed==0 else ""
                 
+                # 无论位置是否变化，始终尝试更新里程数据
+                totalKm = data.get("totalKm", self.totalkm.get(imei, 0))  # 优先用新值，fallback到旧值
+                try:
+                    self.totalkm[imei] = float(totalKm)  # 强制转换为浮点数
+                except (ValueError, TypeError):
+                    _LOGGER.warning(f"无效的里程数据: {totalKm}, 设备IMEI: {imei}")
+                    self.totalkm[imei] = self.totalkm.get(imei, 0)  # 保留旧值
+                
+                # 原有位置判断保留（仅用于地址更新）
                 if self._lat_old != thislat or self._lon_old != thislon:
                     self.address[imei] = await self.hass.async_add_executor_job(self._get_device_address, thislat, thislon)
-                    self.totalkm[imei] = data["totalKm"]
                     self._lat_old = thislat
                     self._lon_old = thislon
+                # =======================
                 
                 address = self.address[imei]
                 totalKm = self.totalkm[imei]
