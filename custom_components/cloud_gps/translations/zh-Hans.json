@@ -59,7 +59,8 @@
 		},
         "sensors": {
 			"options": {
-				"laststoptime": "上次停止时间",
+				"lastruntime": "上次开车时间",
+                "laststoptime": "上次停车时间",
 				"parkingtime": "停车时长",
                 "lastseen": "最后出现时间",
                 "latest_report_time": "最后上报时间",
@@ -151,8 +152,11 @@
                     "latest_report_time": {
 					  "name": "最后上报时间"
 					},
+                    "lastruntime": {
+					  "name": "上次开车时间"
+					},
                     "laststoptime": {
-					  "name": "停车时间"
+					  "name": "上次停车时间"
 					},
 					"parkingtime": {
 					  "name": "停车时长"
@@ -235,8 +239,16 @@
 					}
 				}
 			},
-			"laststoptime": {
-				"name": "上次停止时间",
+			"lastruntime": {
+				"name": "上次开车时间",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "laststoptime": {
+				"name": "上次停车时间",
 				"state_attributes": {
 					"querytime": {
 					  "name": "查询时间"
