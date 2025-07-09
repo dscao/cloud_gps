@@ -49,11 +49,17 @@ class SimpleMQTTManager:
         self._parse_mqtt_info() # 解析连接信息
         
     def _parse_connection(self, server_str):
-        """解析 MQTT 服务器地址和端口"""
+        use_ssl = False
+        if server_str.startswith("ssl://"):
+            use_ssl = True
+            server_str = server_str[6:]
+        elif server_str.startswith("tcp://"):
+            server_str = server_str[6:]
+        
         if ":" in server_str:
             host, port = server_str.split(":", 1)
-            return host, int(port)
-        return server_str, 1883
+            return host, int(port), use_ssl
+        return server_str, 8883 if use_ssl else 1883, use_ssl
 
     def _parse_mqtt_info(self):
         """解析 MQTT 连接信息"""
@@ -62,7 +68,7 @@ class SimpleMQTTManager:
             raise ValueError("Invalid MQTT connection format. Expected: 'server||username||password||clientID'")
             
         server_str = mqtt_parts[0]
-        self.mqtt_server, self.mqtt_port = self._parse_connection(server_str) 
+        self.mqtt_server, self.mqtt_port, self.use_ssl= self._parse_connection(server_str) 
         self.mqtt_username = mqtt_parts[1]
         self.mqtt_password = mqtt_parts[2]
         if len(mqtt_parts) == 4:
@@ -113,7 +119,9 @@ class SimpleMQTTManager:
         self.mqtt_client = mqtt.Client(client_id=client_id)
         if self.mqtt_username != None and self.mqtt_username != "None":
             self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
-        
+        if self.use_ssl:
+            self.mqtt_client.tls_set()
+            self.mqtt_client.tls_insecure_set(True)  # 巴法云需要跳过证书验证
         # 设置 MQTT 客户端的内部回调
         self.mqtt_client.on_connect = self._on_connect
         self.mqtt_client.on_disconnect = self._on_disconnect
@@ -156,6 +164,10 @@ class SimpleMQTTManager:
             
     def _on_connect(self, client, userdata, flags, rc):
         """连接成功回调，在 MQTT 线程中执行。"""
+        _LOGGER.debug(
+            f"Connected to MQTT broker: {self.mqtt_server}:{self.mqtt_port}, "
+            f"Client ID: {client._client_id}, SSL: {self.use_ssl}"
+        )
         if rc == 0:
             _LOGGER.info("Successfully connected to MQTT broker (rc=0).")
             # 订阅主题
@@ -234,6 +246,9 @@ class SimpleMQTTManager:
         
         while self._should_run and not self._is_connected: 
             delay = min(base_delay * (2 ** attempts), max_delay)
+            if "bemfa.com" in self.mqtt_server:
+                # 巴法云需要更短的重连间隔
+                delay = min(3, max_delay)
             _LOGGER.info(f"Attempting reconnect in {delay:.1f} seconds (attempt {attempts+1})")
             await asyncio.sleep(delay)
             
@@ -326,6 +341,14 @@ class SimpleMQTTManager:
                 self.mqtt_client = None
         else:
             _LOGGER.debug("MQTT client not initialized, nothing to stop.")
+            
+    async def monitor_connection(self):
+        """监控连接状态并自动重连"""
+        while self._should_run:
+            if not self._is_connected:
+                _LOGGER.warning("MQTT connection lost, attempting reconnect...")
+                await self.connect()
+            await asyncio.sleep(30)
 
 
 class DataFetcher:
