@@ -333,7 +333,8 @@ class SimpleMQTTManager:
             try:
                 # 尝试停止 Paho 客户端的循环并断开连接
                 await self.hass_loop.run_in_executor(None, self.mqtt_client.loop_stop)
-                await self.hass_loop.run_in_executor(None, self.mqtt_client.disconnect)
+                #await self.hass_loop.run_in_executor(None, self.mqtt_client.disconnect)
+                await self.safe_disconnect()
                 _LOGGER.info("MQTT client stopped successfully.")
             except Exception as e:
                 _LOGGER.warning(f"Error while stopping MQTT client: {e}")
@@ -349,6 +350,52 @@ class SimpleMQTTManager:
                 _LOGGER.warning("MQTT connection lost, attempting reconnect...")
                 await self.connect()
             await asyncio.sleep(30)
+            
+    async def safe_disconnect(self):
+        if not self.mqtt_client:
+            return
+        
+        try:
+            # 设置超时保护
+            await asyncio.wait_for(
+                self.hass_loop.run_in_executor(None, self._sync_disconnect),
+                timeout=5.0  # 根据实际情况调整
+            )
+            _LOGGER.info("MQTT client stopped successfully")
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Forcing MQTT client cleanup after timeout")
+        except Exception as e:
+            _LOGGER.error(f"Disconnection error: {repr(e)}")
+        finally:
+            self._force_cleanup()
+
+    def _sync_disconnect(self):
+        try:
+            # 安全停止循环
+            if self.mqtt_client.loop_stop_force():
+                _LOGGER.debug("Loop stopped forcefully")
+            
+            # 异步断开连接（非阻塞）
+            self.mqtt_client.disconnect()
+            
+            # 等待有限时间
+            end_time = time.monotonic() + 3.0  # 最大等待3秒
+            while self.mqtt_client.is_connected() and time.monotonic() < end_time:
+                time.sleep(0.1)
+        except Exception as e:
+            _LOGGER.debug(f"Sync disconnect error: {e}")
+
+    def _force_cleanup(self):
+        # 5. 强制清理资源
+        if self.mqtt_client:
+            try:
+                self.mqtt_client.socket().close()  # 强制关闭底层socket
+            except:
+                pass
+            finally:
+                self.mqtt_client = None
+        self._is_connected = False
+        self._connected_event.set()  # 防止其他等待        
 
 
 class DataFetcher:
