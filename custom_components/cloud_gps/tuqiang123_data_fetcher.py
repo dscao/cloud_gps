@@ -262,6 +262,58 @@ class DataFetcher:
 
         return self.trackerdata
 
+    async def get_today_mileage(self):
+
+        _LOGGER.debug(self.device_imei)
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self.username, self.password)
+
+        for imei in self.device_imei:
+            _LOGGER.debug("Requests imei: %s", imei)
+            if not self.deviceinfo.get(imei):
+
+                try:
+                    async with timeout(10):
+                        infodata = await self.hass.async_add_executor_job(self._get_device_info, imei)
+                except (
+                        ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result infodata: %s", infodata)
+
+                if infodata:
+                    self.deviceinfo[imei] = infodata
+                    self.deviceinfo[imei]["device_model"] = "途强在线GPS"
+                    self.deviceinfo[imei]["sw_version"] = infodata["mcType"]
+                    self.deviceinfo[imei]["expiration"] = infodata["expiration"]
+            data = None
+            try:
+                async with timeout(10):
+                    data = await self.hass.async_add_executor_job(self._get_device_tracker, imei)
+                    _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
+            except ClientConnectorError as error:
+                _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
+            except asyncio.TimeoutError:
+                _LOGGER.error("途强在线 %s 获取数据超时 (10秒)", imei)
+            except Exception as e:
+                await self.hass.async_add_executor_job(self._login, self.username, self.password)
+                raise UpdateFailed(e)
+
+            if data:
+                querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                updatetime = data["hbTime"]
+                imei = data["imei"]
+
+                today_dis = data["dis"]
+                attrs = {
+                    "today_dis": today_dis,
+                }
+
+                self.trackerdata[imei] = {"today_dis": today_dis,
+                                          "attrs": attrs}
+
+        return self.trackerdata
 
 class GetDataError(Exception):
     """request error or response data is unexpected"""
