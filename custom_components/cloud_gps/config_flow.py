@@ -65,7 +65,7 @@ WEBHOST = {
     "hellobike.com": "哈啰智能芯（*密码填写token）",
     "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
     "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）",
-    "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password，密码填写mqtt主题）"
+    "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password||client_id，密码填写mqtt主题）"
 }
 
 API_HOST_TUQIANG123 = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com

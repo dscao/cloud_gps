@@ -35,10 +35,7 @@ class SimpleMQTTManager:
         """
         self.hass_loop = hass_loop # 存储 Home Assistant 的事件循环
         self.connection_str = connection_str
-        topic_parts = topic.split("||")
-        self.base_topic = topic if len(topic_parts) < 2 else topic_parts[0]
-        self.command_topic = self.get_command_topic(self.base_topic) if len(topic_parts) < 2 else topic_parts[1]
-            
+        self.base_topic = topic
         self.mqtt_client = None
         self.mqtt_clientid = None
         self._is_connected = False
@@ -71,12 +68,14 @@ class SimpleMQTTManager:
         if len(mqtt_parts) == 4:
             self.mqtt_clientid = mqtt_parts[3]
             
-    def get_command_topic(self, topic):
+    def get_command_topic(self):
         """获取命令主题，格式为 <base_topic>/command"""
-        if topic and topic.endswith("/#"):
-            return f"{topic.rstrip('/#')}/command"
+        if self.base_topic and self.base_topic.endswith("/#"):
+            return f"{self.base_topic.rstrip('/#')}/command"
+        elif "/" in self.base_topic:
+            return f"{self.base_topic}/command"
         elif self.base_topic:
-            return f"{topic}/command"
+            return f"{self.base_topic}command"
         return "command" # fallback
 
     def set_message_callback(self, callback):
@@ -846,7 +845,7 @@ class DataButton:
                 _LOGGER.error("Failed to reconnect MQTT for button action.")
                 return False
                 
-        command_topic = self.mqtt_manager.command_topic
+        command_topic = self.mqtt_manager.get_command_topic()
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
 
@@ -874,7 +873,7 @@ class DataSwitch:
                 _LOGGER.error("Failed to reconnect MQTT for switch action.")
                 return False
         
-        command_topic = self.mqtt_manager.command_topic
+        command_topic = self.mqtt_manager.get_command_topic()
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
         

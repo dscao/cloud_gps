@@ -5,7 +5,7 @@ Github        : https://github.com/dscao
 Description   : 
 Date          : 2023-11-16
 LastEditors   : dscao
-LastEditTime  : 2025-6-26
+LastEditTime  : 2025-7-9
 '''
 """    
 Component to integrate with Cloud_GPS.
@@ -151,8 +151,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False # 或者抛出异常，阻止集成加载
 
     coordinator = CloudDataUpdateCoordinator(
-        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key,
-        mqtt_manager # <-- 传递 mqtt_manager
+        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager
     )
     
     await coordinator.async_refresh()
@@ -185,7 +184,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         COORDINATOR: coordinator,
         UNDO_UPDATE_LISTENER: undo_listener,
-        MQTT_MANAGER: mqtt_manager # <-- 将 mqtt_manager 存储起来
+        MQTT_MANAGER: mqtt_manager
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
