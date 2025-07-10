@@ -13,8 +13,8 @@ import homeassistant.util.dt as dt_util # 导入 Home Assistant 的时间工具
 _LOGGER = logging.getLogger(__name__)
 
 EARTH_RADIUS = 6378.137  # 地球半径（公里）
-MIN_DISTANCE_FOR_MOVEMENT = 20   # 移动的最小距离阈值（米）
-MIN_SPEED_FOR_MOVEMENT = 2.0     # 移动的最小速度阈值（km/h）
+MIN_DISTANCE_FOR_MOVEMENT =50   # 移动的最小距离阈值（米）
+MIN_SPEED_FOR_MOVEMENT = 1.0     # 移动的最小速度阈值（km/h）
 
 class DateTimeEncoder(json.JSONEncoder):
     """用于将 datetime 对象序列化为 ISO 格式字符串的 JSON 编码器。"""
@@ -35,8 +35,12 @@ class SimpleMQTTManager:
         """
         self.hass_loop = hass_loop # 存储 Home Assistant 的事件循环
         self.connection_str = connection_str
-        self.base_topic = topic # 这是订阅的基础主题，或发布命令的基础主题
+        topic_parts = topic.split("||")
+        self.base_topic = topic if len(topic_parts) < 2 else topic_parts[0]
+        self.command_topic = self.get_command_topic(self.base_topic) if len(topic_parts) < 2 else topic_parts[1]
+            
         self.mqtt_client = None
+        self.mqtt_clientid = None
         self._is_connected = False
         self._should_run = True
         self._reconnect_task = None
@@ -57,20 +61,22 @@ class SimpleMQTTManager:
     def _parse_mqtt_info(self):
         """解析 MQTT 连接信息"""
         mqtt_parts = self.connection_str.split("||")
-        if len(mqtt_parts) != 3:
-            raise ValueError("Invalid MQTT connection format. Expected: 'server||username||password'")
+        if len(mqtt_parts) < 3:
+            raise ValueError("Invalid MQTT connection format. Expected: 'server||username||password||clientID'")
             
         server_str = mqtt_parts[0]
         self.mqtt_server, self.mqtt_port = self._parse_connection(server_str) 
         self.mqtt_username = mqtt_parts[1]
-        self.mqtt_password = mqtt_parts[2] 
+        self.mqtt_password = mqtt_parts[2]
+        if len(mqtt_parts) == 4:
+            self.mqtt_clientid = mqtt_parts[3]
             
-    def get_command_topic(self):
+    def get_command_topic(self, topic):
         """获取命令主题，格式为 <base_topic>/command"""
-        if self.base_topic and self.base_topic.endswith("/#"):
-            return f"{self.base_topic.rstrip('/#')}/command"
+        if topic and topic.endswith("/#"):
+            return f"{topic.rstrip('/#')}/command"
         elif self.base_topic:
-            return f"{self.base_topic}/command"
+            return f"{topic}/command"
         return "command" # fallback
 
     def set_message_callback(self, callback):
@@ -103,9 +109,11 @@ class SimpleMQTTManager:
         # 创建新客户端
         client_id_prefix = slugify(self.mqtt_username) if self.mqtt_username else "ha_mqtt"
         client_id = f"{client_id_prefix}_{int(time.time())}" 
-        
+        if self.mqtt_clientid:
+            client_id = self.mqtt_clientid
         self.mqtt_client = mqtt.Client(client_id=client_id)
-        self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
+        if self.mqtt_username != None and self.mqtt_username != "None":
+            self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
         
         # 设置 MQTT 客户端的内部回调
         self.mqtt_client.on_connect = self._on_connect
@@ -838,7 +846,7 @@ class DataButton:
                 _LOGGER.error("Failed to reconnect MQTT for button action.")
                 return False
                 
-        command_topic = self.mqtt_manager.get_command_topic()
+        command_topic = self.mqtt_manager.command_topic
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
 
@@ -866,7 +874,7 @@ class DataSwitch:
                 _LOGGER.error("Failed to reconnect MQTT for switch action.")
                 return False
         
-        command_topic = self.mqtt_manager.get_command_topic()
+        command_topic = self.mqtt_manager.command_topic
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
         

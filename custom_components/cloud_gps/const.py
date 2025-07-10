@@ -10,7 +10,7 @@ REQUIRED_FILES = [
     "translations/en.json",
     "translations/zh-Hans.json",
 ]
-VERSION = "2025.6.27"
+VERSION = "2025.7.9"
 ISSUE_URL = "https://github.com/dscao/cloud_gps/issues"
 
 STARTUP = """
