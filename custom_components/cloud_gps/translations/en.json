@@ -72,7 +72,11 @@
                 "runorstop": "runorstop",
                 "shake": "shake",
                 "battery_status": "Battery Status",
-                "powbattery": "Battery Voltage"
+                "powbattery": "Battery Voltage",
+				"today_dis": "today dis",
+				"yesterday_dis": "yesterday dis",
+				"month_dis": "month dis",
+				"year_dis": "year dis"
 			}
 		},
         "switchs": {
@@ -190,6 +194,18 @@
 					},
                     "totalKm": {
 					  "name": "Total Mileage (km)"
+					},
+                    "today_dis": {
+					  "name": "today dis(km)"
+					},
+                    "yesterday_dis": {
+					  "name": "yesterday dis(km)"
+					},
+                    "month_dis": {
+					  "name": "month dis(km)"
+					},
+                    "year_dis": {
+					  "name": "year dis(km)"
 					},
                     "positionType": {
 					  "name": "Positioning Type"
@@ -337,6 +353,38 @@
 			},
             "latest_report_time": {
 				"name": "Latest Report Time",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "today_dis": {
+				"name": "today dis",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "yesterday_dis": {
+				"name": "yesterda dis",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+			"month_dis": {
+				"name": "month dis",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "year_dis": {
+				"name": "year dis",
 				"state_attributes": {
 					"querytime": {
 					  "name": "Query Time"

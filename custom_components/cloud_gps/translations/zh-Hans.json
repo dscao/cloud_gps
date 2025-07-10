@@ -195,6 +195,18 @@
                     "totalKm": {
 					  "name": "总里程(公里)"
 					},
+                    "today_dis": {
+					  "name": "今天里程(公里)"
+					},
+                    "yesterday_dis": {
+					  "name": "昨天里程(公里)"
+					},
+                    "month_dis": {
+					  "name": "本月里程(公里)"
+					},
+                    "year_dis": {
+					  "name": "今年里程(公里)"
+					},
                     "positionType": {
 					  "name": "定位方式"
 					},

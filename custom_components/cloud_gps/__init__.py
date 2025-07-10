@@ -140,7 +140,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from .gps_mqtt_data_fetcher import SimpleMQTTManager
         mqtt_manager = SimpleMQTTManager(hass.loop, username, password)
         # 在这里连接 MQTT，并由 MQTT Manager 内部维护连接状态
-        await mqtt_manager.connect() 
+        try:
+            await mqtt_manager.connect()
+        except Exception as e:
+            _LOGGER.error("MQTT initial connection failed: %s", e)
         
     _LOGGER.debug("%s 集成条目中已启用设备 %s", titlename, device_imei)
     if not device_imei:
@@ -353,52 +356,6 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
                                     self._address[imei] = await self._get_address_frome_api(imei, self._addressapi, self._api_key, self._private_key)
                                     _LOGGER.debug("api_get_address: %s", self._address.get(imei))
                                 data[imei]["attrs"]["address"] = self._address.get(imei)
-                            # ========== 今日里程获取 ==========
-                            try:
-                                today_data = await self._fetcher.get_today_mileage()  # 正确的方式
-                                today_dis = today_data.get(imei, {}).get("today_dis", 0)
-                                if "attrs" not in data[imei]:
-                                    data[imei]["attrs"] = {}
-                                data[imei]["attrs"]["today_dis"] = today_dis
-
-                                _LOGGER.debug("今日里程数据 for %s: %s", imei, today_dis)
-
-                            except Exception as e:
-                                _LOGGER.warning("获取今日里程失败 for %s: %s", imei, str(e))
-                                today_dis = 0
-                            # ========== 昨日里程获取 ==========
-                            try:
-                                yesterday_data = await self._fetcher.get_yesterday_mileage()  # 正确的方式
-                                yesterday_dis = yesterday_data.get(imei, {}).get("yesterday_dis", 0)
-                                if "attrs" not in data[imei]:
-                                    data[imei]["attrs"] = {}
-                                data[imei]["attrs"]["yesterday_dis"] = yesterday_dis
-                                _LOGGER.debug("昨日里程数据 for %s: %s", imei, yesterday_dis)
-                            except Exception as e:
-                                _LOGGER.warning("获取昨日里程失败 for %s: %s", imei, str(e))
-                                yesterday_dis = 0
-                            # ========== 本月里程获取 ==========
-                            try:
-                                month_data = await self._fetcher.get_month_mileage()  # 正确的方式
-                                month_dis = month_data.get(imei, {}).get("month_dis", 0)
-                                if "attrs" not in data[imei]:
-                                    data[imei]["attrs"] = {}
-                                data[imei]["attrs"]["month_dis"] = month_dis
-                                _LOGGER.debug("昨日里程数据 for %s: %s", imei, month_dis)
-                            except Exception as e:
-                                _LOGGER.warning("获取本月里程失败 for %s: %s", imei, str(e))
-                                month_dis = 0
-                            # ========== 今年里程获取 ==========
-                            try:
-                                year_data = await self._fetcher.get_year_mileage()  # 正确的方式
-                                year_dis = year_data.get(imei, {}).get("year_dis", 0)
-                                if "attrs" not in data[imei]:
-                                    data[imei]["attrs"] = {}
-                                data[imei]["attrs"]["year_dis"] = year_dis
-                                _LOGGER.debug("昨日里程数据 for %s: %s", imei, year_dis)
-                            except Exception as e:
-                                _LOGGER.warning("获取今年里程失败 for %s: %s", imei, str(e))
-                                year_dis = 0
                     # 保存新数据
                     self.data = data
         
