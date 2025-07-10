@@ -59,6 +59,7 @@
 		},
         "sensors": {
 			"options": {
+                "lastruntime": "Last Run Time",
 				"laststoptime": "Last Stop Time",
 				"parkingtime": "Parking Duration",
                 "lastseen": "Last Seen Time",
@@ -151,6 +152,9 @@
                     "latest_report_time": {
 					  "name": "Latest Report Time"
 					},
+                    "lastruntime": {
+					  "name": "lastruntime"
+					},
                     "laststoptime": {
 					  "name": "Last Stop Time"
 					},
@@ -176,7 +180,7 @@
 					  "name": "defence"
 					},
                     "shake": {
-					  "name": "震动状态"
+					  "name": "shake"
 					},
                     "powerStatus": {
 					  "name": "Power Status"
@@ -235,7 +239,15 @@
 					}
 				}
 			},
-			"laststoptime": {
+			"lastruntime": {
+				"name": "Last Run Time",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "laststoptime": {
 				"name": "Last Stop Time",
 				"state_attributes": {
 					"querytime": {

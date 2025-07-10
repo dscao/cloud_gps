@@ -35,10 +35,7 @@ class SimpleMQTTManager:
         """
         self.hass_loop = hass_loop # 存储 Home Assistant 的事件循环
         self.connection_str = connection_str
-        topic_parts = topic.split("||")
-        self.base_topic = topic if len(topic_parts) < 2 else topic_parts[0]
-        self.command_topic = self.get_command_topic(self.base_topic) if len(topic_parts) < 2 else topic_parts[1]
-            
+        self.base_topic = topic
         self.mqtt_client = None
         self.mqtt_clientid = None
         self._is_connected = False
@@ -52,11 +49,17 @@ class SimpleMQTTManager:
         self._parse_mqtt_info() # 解析连接信息
         
     def _parse_connection(self, server_str):
-        """解析 MQTT 服务器地址和端口"""
+        use_ssl = False
+        if server_str.startswith("ssl://"):
+            use_ssl = True
+            server_str = server_str[6:]
+        elif server_str.startswith("tcp://"):
+            server_str = server_str[6:]
+        
         if ":" in server_str:
             host, port = server_str.split(":", 1)
-            return host, int(port)
-        return server_str, 1883
+            return host, int(port), use_ssl
+        return server_str, 8883 if use_ssl else 1883, use_ssl
 
     def _parse_mqtt_info(self):
         """解析 MQTT 连接信息"""
@@ -65,18 +68,20 @@ class SimpleMQTTManager:
             raise ValueError("Invalid MQTT connection format. Expected: 'server||username||password||clientID'")
             
         server_str = mqtt_parts[0]
-        self.mqtt_server, self.mqtt_port = self._parse_connection(server_str) 
+        self.mqtt_server, self.mqtt_port, self.use_ssl= self._parse_connection(server_str) 
         self.mqtt_username = mqtt_parts[1]
         self.mqtt_password = mqtt_parts[2]
         if len(mqtt_parts) == 4:
             self.mqtt_clientid = mqtt_parts[3]
             
-    def get_command_topic(self, topic):
+    def get_command_topic(self):
         """获取命令主题，格式为 <base_topic>/command"""
-        if topic and topic.endswith("/#"):
-            return f"{topic.rstrip('/#')}/command"
+        if self.base_topic and self.base_topic.endswith("/#"):
+            return f"{self.base_topic.rstrip('/#')}/command"
+        elif "/" in self.base_topic:
+            return f"{self.base_topic}/command"
         elif self.base_topic:
-            return f"{topic}/command"
+            return f"{self.base_topic}command"
         return "command" # fallback
 
     def set_message_callback(self, callback):
@@ -114,7 +119,9 @@ class SimpleMQTTManager:
         self.mqtt_client = mqtt.Client(client_id=client_id)
         if self.mqtt_username != None and self.mqtt_username != "None":
             self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
-        
+        if self.use_ssl:
+            self.mqtt_client.tls_set()
+            self.mqtt_client.tls_insecure_set(True)  # 巴法云需要跳过证书验证
         # 设置 MQTT 客户端的内部回调
         self.mqtt_client.on_connect = self._on_connect
         self.mqtt_client.on_disconnect = self._on_disconnect
@@ -157,6 +164,10 @@ class SimpleMQTTManager:
             
     def _on_connect(self, client, userdata, flags, rc):
         """连接成功回调，在 MQTT 线程中执行。"""
+        _LOGGER.debug(
+            f"Connected to MQTT broker: {self.mqtt_server}:{self.mqtt_port}, "
+            f"Client ID: {client._client_id}, SSL: {self.use_ssl}"
+        )
         if rc == 0:
             _LOGGER.info("Successfully connected to MQTT broker (rc=0).")
             # 订阅主题
@@ -235,6 +246,9 @@ class SimpleMQTTManager:
         
         while self._should_run and not self._is_connected: 
             delay = min(base_delay * (2 ** attempts), max_delay)
+            if "bemfa.com" in self.mqtt_server:
+                # 巴法云需要更短的重连间隔
+                delay = min(3, max_delay)
             _LOGGER.info(f"Attempting reconnect in {delay:.1f} seconds (attempt {attempts+1})")
             await asyncio.sleep(delay)
             
@@ -319,7 +333,8 @@ class SimpleMQTTManager:
             try:
                 # 尝试停止 Paho 客户端的循环并断开连接
                 await self.hass_loop.run_in_executor(None, self.mqtt_client.loop_stop)
-                await self.hass_loop.run_in_executor(None, self.mqtt_client.disconnect)
+                #await self.hass_loop.run_in_executor(None, self.mqtt_client.disconnect)
+                await self.safe_disconnect()
                 _LOGGER.info("MQTT client stopped successfully.")
             except Exception as e:
                 _LOGGER.warning(f"Error while stopping MQTT client: {e}")
@@ -327,6 +342,60 @@ class SimpleMQTTManager:
                 self.mqtt_client = None
         else:
             _LOGGER.debug("MQTT client not initialized, nothing to stop.")
+            
+    async def monitor_connection(self):
+        """监控连接状态并自动重连"""
+        while self._should_run:
+            if not self._is_connected:
+                _LOGGER.warning("MQTT connection lost, attempting reconnect...")
+                await self.connect()
+            await asyncio.sleep(30)
+            
+    async def safe_disconnect(self):
+        if not self.mqtt_client:
+            return
+        
+        try:
+            # 设置超时保护
+            await asyncio.wait_for(
+                self.hass_loop.run_in_executor(None, self._sync_disconnect),
+                timeout=5.0  # 根据实际情况调整
+            )
+            _LOGGER.info("MQTT client stopped successfully")
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Forcing MQTT client cleanup after timeout")
+        except Exception as e:
+            _LOGGER.error(f"Disconnection error: {repr(e)}")
+        finally:
+            self._force_cleanup()
+
+    def _sync_disconnect(self):
+        try:
+            # 安全停止循环
+            if self.mqtt_client.loop_stop_force():
+                _LOGGER.debug("Loop stopped forcefully")
+            
+            # 异步断开连接（非阻塞）
+            self.mqtt_client.disconnect()
+            
+            # 等待有限时间
+            end_time = time.monotonic() + 3.0  # 最大等待3秒
+            while self.mqtt_client.is_connected() and time.monotonic() < end_time:
+                time.sleep(0.1)
+        except Exception as e:
+            _LOGGER.debug(f"Sync disconnect error: {e}")
+
+    def _force_cleanup(self):
+        # 5. 强制清理资源
+        if self.mqtt_client:
+            try:
+                self.mqtt_client.socket().close()  # 强制关闭底层socket
+            except:
+                pass
+            finally:
+                self.mqtt_client = None
+        self._is_connected = False
+        self._connected_event.set()  # 防止其他等待        
 
 
 class DataFetcher:
@@ -846,7 +915,7 @@ class DataButton:
                 _LOGGER.error("Failed to reconnect MQTT for button action.")
                 return False
                 
-        command_topic = self.mqtt_manager.command_topic
+        command_topic = self.mqtt_manager.get_command_topic()
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
 
@@ -874,7 +943,7 @@ class DataSwitch:
                 _LOGGER.error("Failed to reconnect MQTT for switch action.")
                 return False
         
-        command_topic = self.mqtt_manager.command_topic
+        command_topic = self.mqtt_manager.get_command_topic()
         _LOGGER.debug("[%s] mqtt_manager.publish: %s ,topic: %s", self.device_imei, message, command_topic)
         return await self.mqtt_manager.publish(message, topic=command_topic)
         

@@ -14,6 +14,7 @@ from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig,
 from collections import OrderedDict
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.util import slugify
 
 from .const import (
     CONF_GPS_CONVER,
@@ -69,7 +70,7 @@ WEBHOST = {
     "hellobike.com": "哈啰智能芯（*密码填写token）",
     "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
     "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）",
-    "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password，密码填写mqtt主题）"
+    "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password||client_id，密码填写mqtt主题）"
 }
 
 API_HOST_TUQIANG123 = "https://www.tuqiang123.com"   # https://www.tuqiangol.com 或者 https://www.tuqiang123.com
@@ -296,7 +297,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         encoded_credentials = base64.b64encode(userpass.encode('utf-8')).decode('utf-8')
         return "Basic " + encoded_credentials
         
-    def test_mqtt_connection(self, server, port, username, password):
+    def test_mqtt_connection(self, server, port, username, password, mqtt_clientid=None, use_ssl=False):
         """测试 MQTT 服务器连接"""
         result = {"success": False, "error": ""}
         connected = False
@@ -307,12 +308,21 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 connected = True
             else:
                 result["error"] = f"Connection failed with code {rc}"
+                
+        client_id_prefix = slugify(username) if username else "ha_mqtt"
+        client_id = f"{client_id_prefix}_{int(time.time())}" 
+        if mqtt_clientid:
+            client_id = mqtt_clientid
         
-        client = mqtt.Client()
+        client = mqtt.Client(client_id=client_id)
         client.on_connect = on_connect
         
         if username and password:
             client.username_pw_set(username, password)
+            
+        if use_ssl:
+            client.tls_set()
+            client.tls_insecure_set(True)  # 巴法云需要跳过证书验证
         
         try:
             client.connect(server, port, 5)  # 5秒连接超时
@@ -340,15 +350,17 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         
     def parse_mqtt_server(self, server_str):
         """解析 MQTT 服务器地址，支持 host:port 格式"""
+        use_ssl = False
+        if server_str.startswith("ssl://"):
+            use_ssl = True
+            server_str = server_str[6:]
+        elif server_str.startswith("tcp://"):
+            server_str = server_str[6:]
+        
         if ":" in server_str:
-            parts = server_str.split(":")
-            host = parts[0]
-            try:
-                port = int(parts[1])
-            except ValueError:
-                port = 1883
-            return host, port
-        return server_str, 1883
+            host, port = server_str.split(":", 1)
+            return host, int(port), use_ssl
+        return server_str, 8883 if use_ssl else 1883, use_ssl
             
     async def async_step_user(self, user_input={}):
         self._errors = {}
@@ -666,24 +678,27 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             elif webhost=="gps_mqtt":
                 # 确保用户名格式正确
                 if "||" not in username:
-                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password 格式")
-                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password 格式"
+                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password||clientID 格式")
+                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password||clientID 格式，最后的||clientID可以省略"
                     return await self._show_config_form(user_input)
                 
-                parts = username.split("||")
-                if len(parts) < 3:
-                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password 格式")
-                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password 格式"
+                mqtt_parts = username.split("||")
+                if len(mqtt_parts) < 3:
+                    _LOGGER.error("mqtt服务器格式不正确，请按 server||username||password||clientID 格式")
+                    self._errors["base"] = "mqtt服务器格式不正确，请按 server||username||password||clientID 格式，最后的||clientID可以省略"
                     return await self._show_config_form(user_input)
                 
-                server_str = parts[0]
-                mqtt_username = parts[1]
-                mqtt_password = parts[2]
+                server_str = mqtt_parts[0]
+
+                mqtt_username = mqtt_parts[1]
+                mqtt_password = mqtt_parts[2]
+                if len(mqtt_parts) == 4:
+                    mqtt_clientid = mqtt_parts[3]
+                else:
+                    mqtt_clientid = None
                 
                 # 解析服务器地址和端口
-                server, port = await self.hass.async_add_executor_job(
-                    self.parse_mqtt_server, server_str
-                )
+                server, port, use_ssl= self.parse_mqtt_server(server_str) 
                 
                 # 测试 MQTT 连接
                 connection_test = await self.hass.async_add_executor_job(
@@ -691,7 +706,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     server,
                     port,
                     mqtt_username,
-                    mqtt_password
+                    mqtt_password,
+                    mqtt_clientid,
+                    use_ssl
                 )
                 
                 if not connection_test["success"]:
