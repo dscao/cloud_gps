@@ -32,6 +32,10 @@ from .const import (
     KEY_BATTERY_STATUS,
     KEY_RUNORSTOP,
     KEY_SHAKE,
+    KEY_TODAY_DIS,
+    KEY_YESTERDAY_DIS,
+    KEY_MONTH_DIS,
+    KEY_YEAR_DIS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,7 +108,35 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key=KEY_LASTSEEN,
         name="lastseen",
         icon="mdi:eye-check"
-    )
+    ),
+    SensorEntityDescription(
+        key=KEY_TODAY_DIS,
+        name="today_dis",
+        unit_of_measurement="km",
+        device_class="distance",
+        icon="mdi:map-marker-distance",
+    ),
+    SensorEntityDescription(
+        key=KEY_YESTERDAY_DIS,
+        name="yesterday_dis",
+        unit_of_measurement="km",
+        device_class="distance",
+        icon="mdi:map-marker-distance",
+    ),
+    SensorEntityDescription(
+        key=KEY_MONTH_DIS,
+        name="month_dis",
+        unit_of_measurement="km",
+        device_class="distance",
+        icon="mdi:map-marker-distance",
+    ),
+    SensorEntityDescription(
+        key=KEY_YEAR_DIS,
+        name="year_dis",
+        unit_of_measurement="km",
+        device_class="distance",
+        icon="mdi:map-marker-distance",
+    ),
 )
 
 SENSOR_TYPES_MAP = { description.key: description for description in SENSOR_TYPES }
@@ -257,7 +289,14 @@ class CloudGPSSensorEntity(CoordinatorEntity):
                 self._state = attrs.get("battery_status")
             elif self.entity_description.key == "status":
                 self._state = self.coordinator.data[self._imei].get("status")
-            
+            elif self.entity_description.key == "today_dis":
+                self._state = attrs.get("today_dis")
+            elif self.entity_description.key == "yesterday_dis":
+                self._state = attrs.get("yesterday_dis")
+            elif self.entity_description.key == "month_dis":
+                self._state = attrs.get("month_dis")
+            elif self.entity_description.key == "year_dis":
+                self._state = attrs.get("year_dis")
             self._attrs = {"querytime": attrs.get("querytime")}
             
         else:

@@ -72,7 +72,11 @@
                 "runorstop": "运动状态",
                 "shake": "震动状态",
                 "battery_status": "电池状态",
-                "powbattery": "电池电压"
+                "powbattery": "电池电压",
+				"today_dis": "今日里程",
+				"yesterday_dis": "昨日里程",
+				"month_dis": "本月里程",
+				"year_dis": "今年里程"
 			}
 		},
         "switchs": {
@@ -329,6 +333,38 @@
 			},
             "lastseen": {
 				"name": "最后一次出现",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "today_dis": {
+				"name": "今日里程",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "yesterday_dis": {
+				"name": "昨日里程",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+			"month_dis": {
+				"name": "本月里程",
+				"state_attributes": {
+					"querytime": {
+					  "name": "查询时间"
+					}
+				}
+			},
+            "year_dis": {
+				"name": "今年里程",
 				"state_attributes": {
 					"querytime": {
 					  "name": "查询时间"
