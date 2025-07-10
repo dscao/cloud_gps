@@ -73,4 +73,7 @@ KEY_RUNORSTOP = "runorstop"
 KEY_SHAKE = "shake"
 KEY_BATTERY = "powbattery"
 KEY_BATTERY_STATUS = "battery_status"
-
+KEY_TODAY_DIS = "today_dis"
+KEY_YESTERDAY_DIS = "yesterday_dis"
+KEY_MONTH_DIS = "month_dis"
+KEY_YEAR_DIS = "year_dis"

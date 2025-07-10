@@ -46,6 +46,10 @@ from .const import (
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
     CONF_WITH_MAP_CARD,
+    KEY_TODAY_DIS,
+    KEY_YESTERDAY_DIS,
+    KEY_MONTH_DIS,
+    KEY_YEAR_DIS,
 )
 
 import voluptuous as vol
@@ -799,7 +803,11 @@ class OptionsFlow(config_entries.OptionsFlow):
                 {"value": KEY_TOTALKM, "label": "totalkm"},
                 {"value": KEY_STATUS, "label": "status"},
                 {"value": KEY_ACC, "label": "acc"},
-                {"value": KEY_BATTERY, "label": "powbattery"}
+                {"value": KEY_BATTERY, "label": "powbattery"},
+                {"value": KEY_TODAY_DIS, "label": "today_dis"},
+                {"value": KEY_YESTERDAY_DIS, "label": "yesterday_dis"},
+                {"value": KEY_MONTH_DIS, "label": "month_dis"},
+                {"value": KEY_YEAR_DIS, "label": "year_dis"}
             ]
             SWITCHSLIST = []
             BUTTONSLIST = [

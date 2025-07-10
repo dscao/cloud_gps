@@ -52,6 +52,10 @@ class DataFetcher:
         self._lon_old = 0
         self.deviceinfo = {}
         self.trackerdata = {}
+        self.today_mileagedata = {}
+        self.yesterday_mileagedata = {}
+        self.month_mileagedata = {}
+        self.year_mileagedata = {}
         self.address = {}
         self.totalkm = {}
         
@@ -112,7 +116,114 @@ class DataFetcher:
         }
         resp = self.session_tuqiang123.post(url, data=p_data)
         return resp.json()['data']['normalList'][0]
-            
+
+    def _get_device_today_mileage(self, imei_sn):
+        url = TUQIANG123_API_HOST + '/mileageReportController/getList'
+        today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        start_time = f"{today_str} 00:00"
+        end_time = f"{today_str} 23:59"
+        p_data = {
+            'imeis': str(imei_sn),
+            'userType': self.usertype,
+            'followImeis': '',
+            'userId': self.userid,
+            'stock': '2',
+            'startTime': start_time,
+            'endTime': end_time,
+            'pageNo': '1',
+            'startRow': '1',
+            'pageSize': '20',
+            'type': 'segment'
+        }
+        try:
+            resp = self.session_tuqiang123.post(url, data=p_data)
+            _LOGGER.debug(resp.json()['data']['result'][0])
+            return resp.json()['data']['result'][0]
+        except Exception as e:
+            _LOGGER.debug(e)
+            return None
+
+
+    def _get_device_yesterday_mileage(self, imei_sn):
+        url = TUQIANG123_API_HOST + '/mileageReportController/getList'
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        start_time = f"{yesterday_str} 00:00"
+        end_time = f"{yesterday_str} 23:59"
+        p_data = {
+            'imeis': str(imei_sn),
+            'userType': self.usertype,
+            'followImeis': '',
+            'userId': self.userid,
+            'stock': '2',
+            'startTime': start_time,
+            'endTime': end_time,
+            'pageNo': '1',
+            'startRow': '1',
+            'pageSize': '20',
+            'type': 'segment'
+        }
+        try:
+            resp = self.session_tuqiang123.post(url, data=p_data)
+            _LOGGER.debug(resp.json()['data']['result'][0])
+            return resp.json()['data']['result'][0]
+        except Exception as e:
+            _LOGGER.debug(e)
+            return None
+
+    def _get_device_month_mileage(self, imei_sn):
+        url = TUQIANG123_API_HOST + '/mileageReportController/getList'
+        current_month = datetime.datetime.now().strftime("%Y-%m")
+        start_time = f"{current_month}-01 00:00"
+        end_time = f"{current_month}-{datetime.datetime.now().day} 23:59"
+        p_data = {
+            'imeis': str(imei_sn),
+            'userType': self.usertype,
+            'followImeis': '',
+            'userId': self.userid,
+            'stock': '2',
+            'startTime': start_time,
+            'endTime': end_time,
+            'pageNo': '1',
+            'startRow': '1',
+            'pageSize': '20',
+            'type': 'segment'
+        }
+        try:
+            resp = self.session_tuqiang123.post(url, data=p_data)
+            _LOGGER.debug(resp.json()['data']['result'][0])
+            return resp.json()['data']['result'][0]
+        except Exception as e:
+            _LOGGER.debug(e)
+            return None
+
+    def _get_device_year_mileage(self, imei_sn):
+        url = TUQIANG123_API_HOST + '/mileageReportController/getList'
+        current_year = datetime.datetime.now().strftime("%Y")
+        start_time = f"{current_year}-01-01 00:00"
+        end_time = f"{current_year}-12-31 23:59"
+        p_data = {
+            'imeis': str(imei_sn),
+            'userType': self.usertype,
+            'followImeis': '',
+            'userId': self.userid,
+            'stock': '2',
+            'startTime': start_time,
+            'endTime': end_time,
+            'pageNo': '1',
+            'startRow': '1',
+            'pageSize': '20',
+            'type': 'segment'
+        }
+        try:
+            resp = self.session_tuqiang123.post(url, data=p_data)
+            _LOGGER.debug(resp.json()['data']['result'][0])
+            return resp.json()['data']['result'][0]
+        except Exception as e:
+            _LOGGER.debug(e)
+            return None
+
     def _get_device_address(self, lat, lng):
         url = TUQIANG123_API_HOST + '/getAddress?lat='+str(lat)+'&lng='+str(lng)+'&mapType=baiduMap&poiList='
         resp = self.session_tuqiang123.get(url)
@@ -179,7 +290,7 @@ class DataFetcher:
                 direction = data["direction"]
                 speed = data.get("speed",0)
                 gpssignal = data.get("gPSSignal", 0)
-                
+
                 onlinestatus = "在线"
                 status = "停车"
 
@@ -188,10 +299,10 @@ class DataFetcher:
                     status = "钥匙启动"
                 else:
                     acc = "钥匙关闭"
-                                     
+
                 thislat = float(data["lat"])
                 thislon = float(data["lng"])
-                
+
                 if data["status"] == "STATIC":
                     runorstop = "静止"
                     speed = 0
@@ -215,7 +326,7 @@ class DataFetcher:
                     speed = 0
                     parkingtime = ""
                     statustime = ""
-                    
+
                 if data.get("powerStatus") == "1":
                     powerStatus = "已接通"
                 else:
@@ -223,14 +334,14 @@ class DataFetcher:
                     status = "外电已断开"
 
                 voltage = "0" if data["voltage"]=="" else data["voltage"]
-                laststoptime = data["gpsTime"]             
+                laststoptime = data["gpsTime"]
                 positionType = data["positionType"] if speed==0 else ""
-                
+
                 if self._lat_old != thislat or self._lon_old != thislon:
                     self.address[imei] = await self.hass.async_add_executor_job(self._get_device_address, thislat, thislon)
                     self._lat_old = thislat
                     self._lon_old = thislon
-                
+
                 address = self.address.get(imei, "未知")
 
                 try:
@@ -238,7 +349,7 @@ class DataFetcher:
                 except (ValueError, TypeError):
                     _LOGGER.warning(f"无效的里程数据: {data.get('totalKm')}, 设备IMEI: {imei}")
                     totalKm = self.totalkm.get(imei, 0)
-                
+
                 attrs ={
                     "course":direction,
                     "speed":speed,
@@ -290,7 +401,7 @@ class DataFetcher:
             data = None
             try:
                 async with timeout(10):
-                    data = await self.hass.async_add_executor_job(self._get_device_tracker, imei)
+                    data = await self.hass.async_add_executor_job(self._get_device_today_mileage, imei)
                     _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
             except ClientConnectorError as error:
                 _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
@@ -301,20 +412,219 @@ class DataFetcher:
                 raise UpdateFailed(e)
 
             if data:
-                querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                updatetime = data["hbTime"]
                 imei = data["imei"]
-
                 today_dis = data["dis"]
                 attrs = {
                     "today_dis": today_dis,
                 }
+                self.today_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "today_dis": today_dis,
+                    "attrs": attrs
+                }
+            else:
+                today_dis = 0
+                attrs = {
+                    "today_dis": 0,
+                }
+                self.today_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "today_dis": today_dis,
+                    "attrs": attrs
+                }
+        return self.today_mileagedata
 
-                self.trackerdata[imei] = {"today_dis": today_dis,
-                                          "attrs": attrs}
+    async def get_yesterday_mileage(self):
 
-        return self.trackerdata
+        _LOGGER.debug(self.device_imei)
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self.username, self.password)
 
+        for imei in self.device_imei:
+            _LOGGER.debug("Requests imei: %s", imei)
+            if not self.deviceinfo.get(imei):
+
+                try:
+                    async with timeout(10):
+                        infodata = await self.hass.async_add_executor_job(self._get_device_info, imei)
+                except (
+                        ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result infodata: %s", infodata)
+
+                if infodata:
+                    self.deviceinfo[imei] = infodata
+                    self.deviceinfo[imei]["device_model"] = "途强在线GPS"
+                    self.deviceinfo[imei]["sw_version"] = infodata["mcType"]
+                    self.deviceinfo[imei]["expiration"] = infodata["expiration"]
+            data = None
+            try:
+                async with timeout(10):
+                    data = await self.hass.async_add_executor_job(self._get_device_yesterday_mileage, imei)
+                    _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
+            except ClientConnectorError as error:
+                _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
+            except asyncio.TimeoutError:
+                _LOGGER.error("途强在线 %s 获取数据超时 (10秒)", imei)
+            except Exception as e:
+                await self.hass.async_add_executor_job(self._login, self.username, self.password)
+                raise UpdateFailed(e)
+
+            if data:
+                imei = data["imei"]
+                yesterday_dis = data["dis"]
+                attrs = {
+                    "yesterday_dis": yesterday_dis,
+                }
+                self.yesterday_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "yesterday_dis": yesterday_dis,
+                    "attrs": attrs
+                }
+            else:
+                yesterday_dis = 0
+                attrs = {
+                    "yesterday_dis": 0,
+                }
+                self.yesterday_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "yesterday_dis": yesterday_dis,
+                    "attrs": attrs
+                }
+        return self.yesterday_mileagedata
+
+    async def get_month_mileage(self):
+
+        _LOGGER.debug(self.device_imei)
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self.username, self.password)
+
+        for imei in self.device_imei:
+            _LOGGER.debug("Requests imei: %s", imei)
+            if not self.deviceinfo.get(imei):
+
+                try:
+                    async with timeout(10):
+                        infodata = await self.hass.async_add_executor_job(self._get_device_info, imei)
+                except (
+                        ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result infodata: %s", infodata)
+
+                if infodata:
+                    self.deviceinfo[imei] = infodata
+                    self.deviceinfo[imei]["device_model"] = "途强在线GPS"
+                    self.deviceinfo[imei]["sw_version"] = infodata["mcType"]
+                    self.deviceinfo[imei]["expiration"] = infodata["expiration"]
+            data = None
+            try:
+                async with timeout(10):
+                    data = await self.hass.async_add_executor_job(self._get_device_month_mileage, imei)
+                    _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
+            except ClientConnectorError as error:
+                _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
+            except asyncio.TimeoutError:
+                _LOGGER.error("途强在线 %s 获取数据超时 (10秒)", imei)
+            except Exception as e:
+                await self.hass.async_add_executor_job(self._login, self.username, self.password)
+                raise UpdateFailed(e)
+
+            if data:
+                imei = data["imei"]
+                month_dis = data["dis"]
+                attrs = {
+                    "month_dis": month_dis,
+                }
+                self.month_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "month_dis": month_dis,
+                    "attrs": attrs
+                }
+            else:
+                month_dis = 0
+                attrs = {
+                    "month_dis": 0,
+                }
+                self.month_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "month_dis": month_dis,
+                    "attrs": attrs
+                }
+        return self.month_mileagedata
+
+
+    async def get_year_mileage(self):
+
+        _LOGGER.debug(self.device_imei)
+        if self.userid is None or self.usertype is None:
+            await self.hass.async_add_executor_job(self._login, self.username, self.password)
+
+        for imei in self.device_imei:
+            _LOGGER.debug("Requests imei: %s", imei)
+            if not self.deviceinfo.get(imei):
+
+                try:
+                    async with timeout(10):
+                        infodata = await self.hass.async_add_executor_job(self._get_device_info, imei)
+                except (
+                        ClientConnectorError
+                ) as error:
+                    raise
+
+                _LOGGER.debug("result infodata: %s", infodata)
+
+                if infodata:
+                    self.deviceinfo[imei] = infodata
+                    self.deviceinfo[imei]["device_model"] = "途强在线GPS"
+                    self.deviceinfo[imei]["sw_version"] = infodata["mcType"]
+                    self.deviceinfo[imei]["expiration"] = infodata["expiration"]
+            data = None
+            try:
+                async with timeout(10):
+                    data = await self.hass.async_add_executor_job(self._get_device_year_mileage, imei)
+                    _LOGGER.debug("途强在线 %s 最终数据结果: %s", imei, data)
+            except ClientConnectorError as error:
+                _LOGGER.error("途强在线 %s 连接错误: %s", imei, error)
+            except asyncio.TimeoutError:
+                _LOGGER.error("途强在线 %s 获取数据超时 (10秒)", imei)
+            except Exception as e:
+                await self.hass.async_add_executor_job(self._login, self.username, self.password)
+                raise UpdateFailed(e)
+
+            if data:
+                imei = data["imei"]
+                year_dis = data["dis"]
+                attrs = {
+                    "year_dis": year_dis,
+                }
+                self.year_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "year_dis": year_dis,
+                    "attrs": attrs
+                }
+            else:
+                year_dis = 0
+                attrs = {
+                    "year_dis": 0,
+                }
+                self.year_mileagedata[imei] = {
+                    "location_key": self.location_key + imei,
+                    "deviceinfo": self.deviceinfo.get(imei, {}),
+                    "year_dis": year_dis,
+                    "attrs": attrs
+                }
+        return self.year_mileagedata
 class GetDataError(Exception):
     """request error or response data is unexpected"""
 
