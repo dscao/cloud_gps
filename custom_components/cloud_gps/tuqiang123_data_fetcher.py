@@ -270,7 +270,7 @@ class DataFetcher:
                     totalKm = self.totalkm.get(imei, 0)
 
 
-                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["today_dis"] ) >= 600:
+                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["today_dis_time"] ) >= 600:
                     today_str = datetime.datetime.now().strftime('%Y-%m-%d')
                     start_time = f"{today_str} 00:00"
                     end_time = f"{today_str} 23:59"
