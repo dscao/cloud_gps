@@ -118,10 +118,16 @@ class DataFetcher:
             headers = {"authorization": auth_header}
         
         p_data = self.json_format_data(self.all_device_configs[0])
-        #_LOGGER.debug("payload: %s", p_data)
-        resp = requests.post(url, headers=headers, json=p_data).json()
-        _LOGGER.debug("resp_json: %s", resp)
-        return resp
+        try:
+            response = requests.post(url, headers=headers, json=p_data)
+            if response.status_code == 541:
+                return {"error": response.text}
+            resp = response.json()
+            _LOGGER.debug("resp_json: %s", resp)
+            return resp
+        except requests.exceptions.RequestException as e:
+            _LOGGER.error("请求失败: %s", e)
+            return {"error": str(e)}
         
     def basic_auth(self, username, password):
         userpass = f"{username}:{password}"
@@ -425,7 +431,7 @@ class DataFetcher:
                 
             self._refresh_time = int(datetime.datetime.now().timestamp())
             
-            if devicesinfodata:
+            if devicesinfodata and not devicesinfodata.get("error"):
                 querytime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                 all_device_configs = self.all_device_configs
