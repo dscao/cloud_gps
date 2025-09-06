@@ -194,12 +194,12 @@ class DataFetcher:
                             self.vardata[imei]["speed"] = round((distance / distancetime * 3.6), 1)
                             self.vardata[imei]["course"] = self.calculate_bearing(thislat, thislon, lastlat, lastlon)
                         self.lastgpstime = datetime.datetime.now()
-                        self.vardata[imei]["runorstop"] = "run"
-                        self.vardata[imei]["lastlat"] = thislat
-                        self.vardata[imei]["lastlon"] = thislon
                         if self.vardata[imei].get("runorstop","run") == "stop":
                             _LOGGER.debug("变成运动: %s ,%s", thislat,thislon)
-                            self.vardata[imei]["lastruntime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            self.vardata[imei]["lastruntime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
+                        self.vardata[imei]["runorstop"] = "run"
+                        self.vardata[imei]["lastlat"] = thislat
+                        self.vardata[imei]["lastlon"] = thislon 
                         
                     elif self.vardata[imei].get("runorstop","run") == "run":
                         _LOGGER.debug("变成静止: %s ,%s", thislat,thislon)
