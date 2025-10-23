@@ -61,6 +61,8 @@
 			"options": {
                 "lastruntime": "Last Run Time",
 				"laststoptime": "Last Stop Time",
+                "lastonlinetime": "Last Online Time",
+                "lastofflinetime": "Last Offline Time",
 				"parkingtime": "Parking Duration",
                 "lastseen": "Last Seen Time",
                 "latest_report_time": "Latest Report Time",
@@ -265,6 +267,22 @@
 			},
             "laststoptime": {
 				"name": "Last Stop Time",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+             "lastonlinetime": {
+				"name": "Last Online Time",
+				"state_attributes": {
+					"querytime": {
+					  "name": "Query Time"
+					}
+				}
+			},
+            "lastofflinetime": {
+				"name": "Last Offline Time",
 				"state_attributes": {
 					"querytime": {
 					  "name": "Query Time"
