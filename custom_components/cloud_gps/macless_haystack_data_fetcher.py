@@ -105,10 +105,6 @@ class DataFetcher:
             encoder=DateTimeEncoder  # 使用自定义编码器
         )
 
-        # 使用简单标志而不是立即加载
-        self._persisted_data_loaded = False
-
-        
 
     def _get_devices_info(self):        
         url = str.format(self.username.split("||")[0])
@@ -406,11 +402,6 @@ class DataFetcher:
         
     async def get_data(self): 
         
-        # 延迟加载持久化数据（仅在第一次更新时）
-        if not self._persisted_data_loaded:
-            await self._load_persisted_data()
-            self._persisted_data_loaded = True
-            
         if (int(datetime.datetime.now().timestamp()) - int(self._refresh_time)) >= 60: #限制最快1分钟才请求一次
             devicesinfodata = None
             try:
@@ -418,10 +409,11 @@ class DataFetcher:
                     devicesinfodata = await self.hass.async_add_executor_job(self._get_devices_info)
                     
             except Exception as e:
-                #_LOGGER.error("%s Failed to get data from macless_haystack: %s", self.device_imei, repr(e))
+                _LOGGER.error("%s Failed to get data from macless_haystack: %s", self.device_imei, repr(e))
                 for imei in self.device_imei:
                     # 如果没有数据，尝试使用持久化数据
                     _LOGGER.warning("%s No new data available, using persisted data", imei)
+                    await self._load_persisted_data()
                     self.trackerdata[imei] = self._persisted_data.get("trackerdata", {}).get(imei, {})
                     if not self.trackerdata[imei]:
                         _LOGGER.warning("%s No new data available and no persisted data", imei)
@@ -493,6 +485,7 @@ class DataFetcher:
                         _LOGGER.debug("Device %s: No matching reports", imei)
                         # 如果没有新数据，尝试使用持久化数据
                         _LOGGER.warning("%s No new data available, using persisted data", imei)
+                        await self._load_persisted_data()
                         self.trackerdata[imei] = self._persisted_data.get("trackerdata", {}).get(imei, {})
                         if not self.trackerdata[imei]:
                             _LOGGER.warning("%s No new data available and no persisted data", imei)
@@ -575,6 +568,3 @@ class DataFetcher:
         
 class GetDataError(Exception):
     """request error or response data is unexpected"""                
-            
-            
-            
