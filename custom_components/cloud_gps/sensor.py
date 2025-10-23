@@ -22,6 +22,8 @@ from .const import (
     KEY_ADDRESS,
     KEY_LASTSTOPTIME,
     KEY_LASTRUNTIME,
+    KEY_LASTONLINETIME,
+    KEY_LASTOFFLINETIME,
     KEY_LASTSEEN,
     KEY_PARKING_TIME,
     KEY_SPEED,
@@ -59,6 +61,16 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key=KEY_LASTRUNTIME,
         name="lastruntime",
+        icon="mdi:timer-star"
+    ),
+    SensorEntityDescription(
+        key=KEY_LASTOFFLINETIME,
+        name="lastofflinetime",
+        icon="mdi:timer-stop"
+    ),
+    SensorEntityDescription(
+        key=KEY_LASTONLINETIME,
+        name="lastonlinetime",
         icon="mdi:timer-star"
     ),
     SensorEntityDescription(
@@ -269,6 +281,10 @@ class CloudGPSSensorEntity(CoordinatorEntity):
                 self._state = attrs.get("laststoptime")
             elif self.entity_description.key == "lastruntime":
                 self._state = attrs.get("lastruntime")
+            elif self.entity_description.key == "lastonlinetime":
+                self._state = attrs.get("lastonlinetime")
+            elif self.entity_description.key == "lastofflinetime":
+                self._state = attrs.get("lastofflinetime")
             elif self.entity_description.key == "lastseen":
                 self._state = attrs.get("lastseen")
             elif self.entity_description.key == "address":
