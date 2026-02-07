@@ -29,8 +29,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-HELLOBIKE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.43(0x18002b2d) NetType/4G Language/zh_CN'
-API_URL_HELLOBIKE = "https://a.hellobike.com/evehicle/api"
 
 SWITCH_TYPES: tuple[SwitchEntityDescription, ...] = (
     SwitchEntityDescription(
@@ -110,6 +108,8 @@ class CloudGPSSwitchEntity(SwitchEntity):
             from .hellobike_data_fetcher import DataSwitch
         elif webhost == "gps_mqtt":
             from .gps_mqtt_data_fetcher import DataSwitch
+        elif webhost == "niu.com":
+            from .niu_data_fetcher import DataSwitch
         else:
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
@@ -205,6 +205,9 @@ class CloudGPSSwitchEntity(SwitchEntity):
                 if self.entity_description.key == "open_lock":
                     _LOGGER.debug("open_lock: %s", self.coordinator.data[self._imei])
                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("In1")== 1
+            elif self._webhost == "niu.com":
+                if self.entity_description.key == "open_lock":
+                     self._is_on = self.coordinator.data[self._imei]["attrs"].get("acc") == "已开锁"
                     
         self._doing = False
     
