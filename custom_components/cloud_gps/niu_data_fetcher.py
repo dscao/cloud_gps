@@ -317,3 +317,65 @@ class DataFetcher:
             _LOGGER.debug(f"NIU Data for {sn} processed: {status}, Bat: {battery_level}%")
 
         return self.trackerdata
+
+class DataButton:
+    def __init__(self, hass, username, password, imei, mqtt_manager=None):
+        self.hass = hass
+        # 复用 DataFetcher 来处理 Token 和 API 请求
+        self.fetcher = DataFetcher(hass, username, password, [imei], "")
+
+    async def _action(self, command_type):
+        """发送控制指令"""
+        # 在 executor 中运行，防止阻塞
+        return await self.hass.async_add_executor_job(self._send_command_sync, command_type)
+
+    def _send_command_sync(self, command_type):
+        # 确保获取到 Token
+        if not self.fetcher._get_token():
+            return "Token获取失败"
+
+        # 这里使用验证过的发送指令 API
+        # 注意：小牛发指令通常需要 SN，而 DataButton 初始化传入的 imei 即为 SN
+        sn = self.fetcher.device_imei[0] 
+        url = NIU_API_BASE_URL + "/v5/cmd/creat"
+
+        headers = {
+            "token": self.fetcher.token,
+            "Content-Type": "application/json; charset=utf-8",
+            # 发送指令最好模拟 iOS 客户端，成功率较高
+            "User-Agent": "manager/5.12.4 (iPhone; iOS 18.5; Scale/3.00);deviceName=iPhone;timezone=Asia/Shanghai;model=iPhone13,4;lang=zh-CN;ostype=iOS;clientIdentifier=Domestic"
+        }
+        payload = json.dumps({"sn": sn, "type": command_type})
+
+        try:
+            r = requests.post(url, headers=headers, data=payload, timeout=10)
+            if r.status_code == 200:
+                resp = r.json()
+                if resp.get("status") == 0:
+                    _LOGGER.info(f"NIU Command {command_type} success.")
+                    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    _LOGGER.error(f"NIU Command failed: {resp}")
+                    return "指令发送失败"
+        except Exception as e:
+            _LOGGER.error(f"NIU Command Error: {e}")
+            return "网络错误"
+        return "未知错误"
+        
+class DataSwitch:
+    def __init__(self, hass, username, password, imei, mqtt_manager=None):
+        self.hass = hass
+        # 复用 DataButton 已经写好的指令发送逻辑，因为 DataButton 也有 fetcher
+        self.button_logic = DataButton(hass, username, password, imei, mqtt_manager)
+
+    async def _turn_on(self, key):
+        """打开开关"""
+        if key == "open_lock":
+            # 发送 ACC ON 指令
+            await self.button_logic._action("acc_on")
+
+    async def _turn_off(self, key):
+        """关闭开关"""
+        if key == "open_lock":
+            # 发送 ACC OFF 指令
+            await self.button_logic._action("acc_off")
