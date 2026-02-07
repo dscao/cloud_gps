@@ -29,9 +29,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-HELLOBIKE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.43(0x18002b2d) NetType/4G Language/zh_CN'
-API_URL_HELLOBIKE = "https://a.hellobike.com/evehicle/api"
-
 BUTTON_TYPES = {
     "bell": {
         "label": "bell",
@@ -49,6 +46,12 @@ BUTTON_TYPES = {
         "label": "reboot",
         "name": "reboot",
         "icon": "mdi:restart",
+        "device_class": "restart",
+    },
+    "openseat": {
+        "label": "openseat",
+        "name": "openseat",
+        "icon": "mdi:seat-outline", # 或者使用 mdi:lock-open-variant
         "device_class": "restart",
     }
 }
@@ -98,12 +101,15 @@ class CloudGPSButtonEntity(ButtonEntity):
         self._unique_id = f"{self.coordinator.data[self._imei]['location_key']}-{description['label']}"
         self._attr_translation_key = f"{description['name']}"
         self._state = None
+
         if webhost == "tuqiang123.com":
             from .tuqiang123_data_fetcher import DataButton
         elif webhost == "hellobike.com":
             from .hellobike_data_fetcher import DataButton
         elif webhost == "gps_mqtt":
             from .gps_mqtt_data_fetcher import DataButton
+        elif webhost == "niu.com":
+            from .niu_data_fetcher import DataButton
         else:
             _LOGGER.error("配置的实体平台不支持，请不要启用此按钮实体！")
             return
@@ -151,7 +157,7 @@ class CloudGPSButtonEntity(ButtonEntity):
         """Return the unit_of_measurement."""
         if self._description.get("device_class"):
             return self._description["device_class"]
-           
+            
         
     def press(self) -> None:
         """Handle the button press."""
@@ -166,6 +172,8 @@ class CloudGPSButtonEntity(ButtonEntity):
             self._state = await self._button._action({"cmd":"dw"})
         elif self._webhost == "gps_mqtt" and self._description['label']=="reboot":
             self._state = await self._button._action({"cmd":"reboot"})
+        elif self._webhost == "niu.com" and self._description['label']=="openseat":
+            self._state = await self._button._action("cushion_lock_on")
         
 
     async def async_added_to_hass(self):
@@ -176,6 +184,4 @@ class CloudGPSButtonEntity(ButtonEntity):
 
     async def async_update(self):
         """Update entity."""
-        #await self.coordinator.async_request_refresh()        
-    
-        
+        #await self.coordinator.async_request_refresh()
