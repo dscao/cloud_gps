@@ -67,7 +67,7 @@ WEBHOST = {
     "tuqiang123.com": "途强在线",
     "tuqiang.net": "途强物联",
     "gooddriver.cn": "优驾盒子联网版", 
-    "niu.com": "小牛电动车（暂未调试）",    
+    "niu.com": "小牛电动车",    
     "cmobd.com": "中移行车卫士（*密码填写token）",    
     "hellobike.com": "哈啰智能芯（*密码填写token）",
     "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
@@ -214,7 +214,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return resp
         
     def _get_niu_token(self, username, password):
-        url = API_HOST_TOKEN_NIU + '/v3/api/oauth2/token'
+        """获取小牛 Token (使用验证过的 V3 接口)"""
+        # 注意：这里修正为验证过的 V3 登录接口，确保与 data_fetcher 一致
+        url = API_HOST_TOKEN_NIU + '/app/v3/passport/login'
         md5 = hashlib.md5(password.encode("utf-8")).hexdigest()
         data = {
             "account": username,
@@ -223,27 +225,54 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             "scope": "base",
             "app_id": "niu_ktdrr960",
         }
+        
+        # 增加 headers 模拟 App
+        headers = {
+            'User-Agent': 'manager/4.6.48 (android; IN2020 11);lang=zh-CN',
+            'Accept-Language': 'zh-CN,zh;q=0.9'
+        }
+
         try:
-            r = requests.post(url, data=data)
-        except BaseException as e:
-            print(e)
-            return False
-        data = json.loads(r.content.decode())
-        _LOGGER.debug("get niu token data: %s", data)
-        return data
+            # 使用 self.session 保持连接，增加超时设置
+            r = self.session.post(url, data=data, headers=headers, timeout=10)
+            r.raise_for_status() # 如果是 4xx/5xx 错误直接抛出异常
+        except Exception as e:
+            _LOGGER.error(f"NIU Login Error: {e}")
+            # 返回一个带 status 的字典，防止后续代码 .get("status") 报错
+            return {"status": -1, "desc": "网络请求失败，可能用户名或密码不正确"}
+
+        try:
+            data = r.json()
+            _LOGGER.debug("get niu token data: %s", data)
+            return data
+        except json.JSONDecodeError:
+            return {"status": -1, "desc": "解析响应失败"}
 
     def _get_niu_vehicles_info(self, token):
-
-        url = API_URL_NIU + '/v5/scooter/list'
-        headers = {"token": token}
+        """获取小牛车辆列表"""
+        # 使用与 data_fetcher 一致的 V3 接口，确保获取到正确的 sn_id
+        url = API_URL_NIU + '/v3/motoinfo/list'
+        headers = {
+            "token": token,
+            "User-Agent": "manager/4.6.48 (android; IN2020 11);lang=zh-CN"
+        }
+        
         try:
-            r = requests.get(url, headers=headers, data=[])
-        except ConnectionError:
-            return False
-        if r.status_code != 200:
-            return False
-        data = json.loads(r.content.decode())
-        return data
+            # GET 请求不应该带 data=[] 参数，这不符合规范且可能导致部分服务器报错
+            r = self.session.get(url, headers=headers, timeout=10)
+            r.raise_for_status()
+        except Exception as e:
+            _LOGGER.error(f"NIU Get Vehicle List Error: {e}")
+            return {"status": -1, "desc": "获取车辆列表失败"}
+        
+        try:
+            data = r.json()
+            # 简单检查数据结构是否符合预期
+            if "data" not in data or "items" not in data["data"]:
+                _LOGGER.warning("NIU Vehicle List structure unexpected: %s", data)
+            return data
+        except json.JSONDecodeError:
+            return {"status": -1, "desc": "解析车辆列表失败"}
         
     def _devicelist_hellobike(self, token):
         url = API_URL_HELLOBIKE + "?rent.user.getUseBikePagePrimeInfoV3"
@@ -478,41 +507,70 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     self._errors["base"] = status.get("ERROR_MESSAGE")
                     
 
-            elif webhost=="niu.com":
+            elif webhost == "niu.com":
+                # 设置通用 Header，与 helper 中的保持一致
                 headers = {
-                    'User-Agent': USER_AGENT_NIU,
-                    'Accept-Language': 'en-US'
+                    'User-Agent': 'manager/4.6.48 (android; IN2020 11);lang=zh-CN',
+                    'Accept-Language': 'zh-CN,zh;q=0.9'
                 }
-                self.session.headers = headers
-
+                self.session.headers.update(headers)
                 self.session.verify = True
+
+                # 1. 获取 Token
                 tokendata = await self.hass.async_add_executor_job(self._get_niu_token, username, password)
-                if tokendata.get("status") != 0:
-                    self._errors["base"] = tokendata.get("desc")
-                    return await self._show_config_form(user_input)                    
-                token = tokendata["data"]["token"]["access_token"]
-                if token:
-                    devicelistinfo = await self.hass.async_add_executor_job(self._get_niu_vehicles_info, token)     
-                    deviceslist_data = devicelistinfo["data"]["items"]
-                    _LOGGER.debug(deviceslist_data)
-                    for deviceslist in deviceslist_data:
-                        devices.append(str(deviceslist["sn_id"]))
                 
-                    await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_USERNAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
-                    self._abort_if_unique_id_configured()
+                # 检查登录结果
+                if not tokendata or tokendata.get("status") != 0:
+                    self._errors["base"] = tokendata.get("desc", "登录失败，请检查账号或密码")
+                    return await self._show_config_form(user_input)
+                
+                # 尝试提取 Token
+                try:
+                    token = tokendata["data"]["token"]["access_token"]
+                except (KeyError, TypeError):
+                    self._errors["base"] = "登录成功但返回数据异常(无法获取Token)"
+                    return await self._show_config_form(user_input)
+
+                # 2. 获取车辆列表
+                if token:
+                    devicelistinfo = await self.hass.async_add_executor_job(self._get_niu_vehicles_info, token)
                     
-                    config_data[CONF_USERNAME] = username
-                    config_data[CONF_PASSWORD] = password
-                    config_data[CONF_DEVICES] = devices
-                    config_data[CONF_WEB_HOST] = webhost
+                    # 检查列表获取结果
+                    if not devicelistinfo or devicelistinfo.get("status") != 0:
+                         self._errors["base"] = devicelistinfo.get("desc", "获取车辆列表失败")
+                         return await self._show_config_form(user_input)
                     
-                    _LOGGER.debug(devices)
-                    
-                    return self.async_create_entry(
-                        title=user_input[CONF_NAME], data=config_data
-                    )
+                    # 提取车辆 SN
+                    if "data" in devicelistinfo and "items" in devicelistinfo["data"]:
+                        deviceslist_data = devicelistinfo["data"]["items"]
+                        _LOGGER.debug(deviceslist_data)
+                        
+                        if not deviceslist_data:
+                            self._errors["base"] = "该账号下未发现小牛电动车"
+                            return await self._show_config_form(user_input)
+
+                        for deviceslist in deviceslist_data:
+                            # 这里的 sn_id 对应 niu_data_fetcher.py 中的 device_imei 参数
+                            devices.append(str(deviceslist["sn_id"]))
+                
+                        # 3. 保存配置
+                        await self.async_set_unique_id(f"cloudpgs-{user_input[CONF_USERNAME]}-{user_input[CONF_WEB_HOST]}".replace(".","_"))
+                        self._abort_if_unique_id_configured()
+                        
+                        config_data[CONF_USERNAME] = username
+                        config_data[CONF_PASSWORD] = password
+                        config_data[CONF_DEVICES] = devices
+                        config_data[CONF_WEB_HOST] = webhost
+                        
+                        _LOGGER.debug(devices)
+                        
+                        return self.async_create_entry(
+                            title=user_input[CONF_NAME], data=config_data
+                        )
+                    else:
+                        self._errors["base"] = "获取到的车辆数据格式不正确"
                 else:
-                    self._errors["base"] = "communication"
+                    self._errors["base"] = "Token 获取失败"
                     
             elif webhost=="cmobd.com":
                 headers = {
@@ -920,6 +978,25 @@ class OptionsFlow(config_entries.OptionsFlow):
             BUTTONSLIST = [
                 {"value": "nowtrack", "label": "nowtrack"},
                 {"value": "reboot", "label": "reboot"}
+            ]
+        elif self.config_entry.data.get(CONF_WEB_HOST) == "niu.com":
+            SENSORSLIST = [
+                {"value": KEY_BATTERY, "label": "powbattery"},          # 电量百分比
+                {"value": KEY_BATTERY_STATUS, "label": "battery_status"}, # 充电状态
+                {"value": KEY_PARKING_TIME, "label": "parkingtime"},    # 停车时长
+                {"value": KEY_LASTSEEN, "label": "lastseen"},           # 最后通讯时间
+                {"value": KEY_TOTALKM, "label": "totalkm"},             # 总里程
+                {"value": KEY_SPEED, "label": "speed"},                 # 速度
+                {"value": KEY_STATUS, "label": "status"},               # 状态(停车/行驶/离线)
+                {"value": KEY_ACC, "label": "acc"},                     # ACC状态(已锁车/已开锁)
+                {"value": KEY_RUNORSTOP, "label": "runorstop"},         # 运动状态
+                {"value": KEY_ADDRESS, "label": "address"}              # 地址
+            ]
+            SWITCHSLIST = [
+                {"value": "open_lock", "label": "open_lock (ACC Power)"} 
+            ]
+            BUTTONSLIST = [
+                {"value": "openseat", "label": "openseat"}
             ]
         else:
             SENSORSLIST = [
