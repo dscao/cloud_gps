@@ -303,7 +303,7 @@ class DataFetcher:
                 
                 if decrypted_data:
                     # 添加报告时间用于后续处理
-                    decrypted_data['report_time'] = report.get("datePublished")
+                    decrypted_data['report_time'] = decrypted_data['timestamp'].timestamp()*1000 if report.get("datePublished") is None else report.get("datePublished")
                     all_decrypted_data.append(decrypted_data)
                     
                     # 记录解密耗时
