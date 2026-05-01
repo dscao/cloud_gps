@@ -7,10 +7,11 @@ import requests
 import re
 import hashlib
 import base64
+import urllib.parse
 import paho.mqtt.client as mqtt
 import homeassistant.helpers.config_validation as cv
 from homeassistant.const import CONF_NAME, CONF_USERNAME, CONF_PASSWORD, CONF_CLIENT_ID
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode, TextSelector, TextSelectorConfig
 from collections import OrderedDict
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -67,10 +68,10 @@ WEBHOST = {
     "tuqiang123.com": "途强在线",
     "tuqiang.net": "途强物联",
     "gooddriver.cn": "优驾盒子联网版", 
-    "niu.com": "小牛电动车",    
+    "niu.com": "小牛电动车（暂未调试）",    
     "cmobd.com": "中移行车卫士（*密码填写token）",    
     "hellobike.com": "哈啰智能芯（*密码填写token）",
-    "auto.amap.com": "高德车机版（*密码填写 Key||sessionid||paramdata）",
+    "auto.amap.com": "高德车机版（*密码直接粘贴完整抓包Raw文本）",
     "macless_haystack": "macless_haystack（*用户名填写 服务器Url，密码填写Key Json）",
     "gps_mqtt": "gps_mqtt（*用户名填写 mqtt服务器 server||user||password||client_id，密码填写mqtt主题）"
 }
@@ -86,6 +87,50 @@ API_URL_HELLOBIKE = "https://a.hellobike.com/evehicle/api"
 API_URL_AUTOAMAP = "http://ts.amap.com/ws/tservice/internal/link/mobile/get?ent=2&in="
 
 _LOGGER = logging.getLogger(__name__)
+
+def parse_raw_http_to_amap_pwd(raw_http_text: str) -> str:
+    """解析 HTTP Raw 报文，无损提取完整路径、所有 Header 和 Body，保存为 JSON"""
+    if not raw_http_text:
+        return ""
+        
+    raw_http_text = raw_http_text.lstrip()
+    
+    # 拆分 Header 区域和 Body 区域
+    if "\r\n\r\n" in raw_http_text:
+        header_block, body_block = raw_http_text.split("\r\n\r\n", 1)
+    elif "\n\n" in raw_http_text:
+        header_block, body_block = raw_http_text.split("\n\n", 1)
+    else:
+        header_block = raw_http_text
+        body_block = ""
+
+    lines = header_block.strip().split('\n')
+    if not lines: return ""
+    
+    request_line = lines[0].strip()
+    
+    # 1. 提取完整 URL 路径 (连带参数原封不动保留，不解码)
+    url_path = ""
+    if " " in request_line:
+        url_path = request_line.split(" ")[1]
+
+    # 2. 提取所有的 Headers
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            key, val = line.split(":", 1)
+            headers[key.strip()] = val.strip()
+
+    # 3. 提取 Body
+    raw_payload = body_block.strip()
+    
+    # 封装为 JSON 存储，完美保留上下文
+    data = {
+        "url_path": url_path,
+        "headers": headers,
+        "body": raw_payload
+    }
+    return json.dumps(data)
 
 @config_entries.HANDLERS.register(DOMAIN)
 class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -294,10 +339,25 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return resp
         
     def _devicelist_autoamap(self, token):
-        url = str.format(API_URL_AUTOAMAP + token.split("||")[0])
-        p_data = token.split("||")[2]
-        resp = self.session.post(url, data=p_data).json()
-        return resp
+        try:
+            # 尝试按最新的 JSON 格式解析
+            req_data = json.loads(token)
+            url = "http://ts.amap.com" + req_data.get("url_path", "")
+            headers = req_data.get("headers", {})
+            p_data = req_data.get("body", "").encode('utf-8')
+            
+            # 清理会引发冲突或乱码的 Header，让 requests 自动处理长度和解压缩
+            for key in ["Content-Length", "content-length", "Host", "host", "Accept-Encoding"]:
+                headers.pop(key, None)
+                
+            resp = self.session.post(url, headers=headers, data=p_data).json()
+            return resp
+        except (json.JSONDecodeError, TypeError):
+            # 兼容老版手填 || 分割的代码
+            url = str.format(API_URL_AUTOAMAP + token.split("||")[0])
+            p_data = token.split("||")[2]
+            resp = self.session.post(url, data=p_data).json()
+            return resp
         
     def _test_macless_haystack(self, url, username, password):
         auth_header = self.basic_auth(username, password)
@@ -402,7 +462,7 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="already_configured")
 
             # If it is not, continue with communication test
-            config_data = {}           
+            config_data = {}            
             username = user_input[CONF_USERNAME]
             password = user_input[CONF_PASSWORD]
             webhost = user_input[CONF_WEB_HOST]
@@ -654,26 +714,26 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     self._errors["base"] = "communication"
                     
             elif webhost=="auto.amap.com":
-                headers = {
-                    'Host': 'ts.amap.com',
-                    'Accept': 'application/json',
-                    'sessionid': password.split("||")[1],
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
-                    'Cookie': 'sessionid=' + password.split("||")[1],
-                    }
-                self.session.headers = headers
-                self.session.verify = True
+                raw_text = user_input[CONF_PASSWORD]
                 
-                status = await self.hass.async_add_executor_job(self._devicelist_autoamap, password)
-                _LOGGER.debug(status)
+                # 判断是已经解析好的 JSON，还是纯粘贴的抓包文本
+                if "{" in raw_text and '"url_path"' in raw_text:
+                    formatted_password = raw_text
+                elif ("HTTP/" in raw_text or "POST " in raw_text or "GET " in raw_text):
+                    formatted_password = parse_raw_http_to_amap_pwd(raw_text)
+                else:
+                    formatted_password = raw_text # 兼容旧版
+
+                # 去测试验证
+                status = await self.hass.async_add_executor_job(self._devicelist_autoamap, formatted_password)
+                _LOGGER.debug("状态: %s", status)
                 
                 if status.get("result") != "true":
-                    self._errors["base"] = status.get("msg")
+                    self._errors["base"] = status.get("message", "API 拒绝或签名失败")
                     return await self._show_config_form(user_input)
                     
-                if status["data"].get("carLinkInfoList"):
+                if status.get("data") and status["data"].get("carLinkInfoList"):
                     deviceslist_data = status["data"]["carLinkInfoList"]
-                    _LOGGER.debug(deviceslist_data)
                     for deviceslist in deviceslist_data:
                         devices.append(str(deviceslist["tid"]))
                 
@@ -681,11 +741,9 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     self._abort_if_unique_id_configured()
                     
                     config_data[CONF_USERNAME] = username
-                    config_data[CONF_PASSWORD] = password
+                    config_data[CONF_PASSWORD] = formatted_password
                     config_data[CONF_DEVICES] = devices
                     config_data[CONF_WEB_HOST] = webhost
-                    
-                    _LOGGER.debug(devices)
                     
                     return self.async_create_entry(
                         title=user_input[CONF_NAME], data=config_data
@@ -812,7 +870,8 @@ class FlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = OrderedDict()
         data_schema[vol.Required(CONF_NAME, default=device_name)] = str
         data_schema[vol.Required(CONF_USERNAME ,default ="")] = str
-        data_schema[vol.Required(CONF_PASSWORD ,default ="")] = str
+        # 将 PASSWORD 字段替换为多行文本选择器，方便用户粘贴一大段 Raw 报文
+        data_schema[vol.Required(CONF_PASSWORD ,default ="")] = TextSelector(TextSelectorConfig(multiline=True))
         data_schema[vol.Required(CONF_WEB_HOST, default="")] = vol.All(str, vol.In(WEBHOST))
 
         return self.async_show_form(
@@ -1016,7 +1075,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             step_id="user",            
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PASSWORD, default=PWD_NOT_CHANGED): cv.string,
+                    vol.Required(CONF_PASSWORD, default=PWD_NOT_CHANGED): TextSelector(TextSelectorConfig(multiline=True)),
                     vol.Optional(
                         CONF_DEVICE_IMEI, 
                         default=self.config_entry.options.get(CONF_DEVICE_IMEI,[])): SelectSelector(
@@ -1115,4 +1174,3 @@ class OptionsFlow(config_entries.OptionsFlow):
                 }
             ),
         )
-
