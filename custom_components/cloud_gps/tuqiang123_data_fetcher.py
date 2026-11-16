@@ -13,6 +13,7 @@ from async_timeout import timeout
 from aiohttp.client_exceptions import ClientConnectorError
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
+import homeassistant.util.dt as dt_util
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 from homeassistant.const import (
@@ -136,7 +137,68 @@ class DataFetcher:
             'type': 'segment'
         }
         resp = self.session_tuqiang123.post(url, data=p_data)
-        return resp.json()['data']['result']
+        respjson = resp.json()
+        if respjson.get("code") != 0:
+            raise ValueError(respjson.get("msg") or "获取里程报表失败")
+        respdata = respjson.get("data")
+        if not isinstance(respdata, dict):
+            respdata = {}
+        result = respdata.get("result") or []
+        # 平台返回的 totalDistiance 即为区间总里程，缺失或异常时累加明细
+        total = None
+        raw_total = respdata.get("totalDistiance")
+        if raw_total is not None and str(raw_total).strip() != "":
+            try:
+                total = float(raw_total)
+            except (TypeError, ValueError):
+                total = None
+        if total is None:
+            total = 0.0
+            for item in result:
+                try:
+                    total += float(item.get("dis") or 0)
+                except (TypeError, ValueError):
+                    pass
+        return round(total, 2)
+
+    def _mileage_query(self, period):
+        """按周期返回 (缓存标识, 起, 止)，时间格式为平台要求的 YYYY-MM-DD HH:MM:SS"""
+        now = dt_util.now()
+        if period == "today":
+            start_day = end_day = now
+            cache_key = now.strftime('%Y-%m-%d')
+        elif period == "yesterday":
+            start_day = end_day = now - datetime.timedelta(days=1)
+            cache_key = start_day.strftime('%Y-%m-%d')
+        elif period == "month":
+            start_day = now.replace(day=1)
+            end_day = now
+            cache_key = now.strftime('%Y-%m')
+        else:
+            start_day = now.replace(month=1, day=1)
+            end_day = now
+            cache_key = now.strftime('%Y')
+        return (cache_key,
+                start_day.strftime('%Y-%m-%d 00:00:00'),
+                end_day.strftime('%Y-%m-%d 23:59:59'))
+
+    async def _update_mileage(self, imei, period):
+        """按周期刷新今日/昨日/本月/今年里程，获取失败时保留上一次的值"""
+        cache = self.dis.setdefault(imei, {})
+        cache_key, start_time, end_time = self._mileage_query(period)
+        interval = 600 if period == "today" else 3600
+        if (cache.get(f"{period}_dis_key") == cache_key
+                and int(datetime.datetime.now().timestamp()) - int(cache.get(f"{period}_dis_time") or 0) < interval):
+            return
+        try:
+            async with timeout(10):
+                mileage = await self.hass.async_add_executor_job(self._get_device_mileage, imei, start_time, end_time)
+        except Exception as e:
+            _LOGGER.debug("途强在线 %s 获取%s里程失败: %s", imei, period, e)
+            return
+        cache[f"{period}_dis"] = mileage
+        cache[f"{period}_dis_time"] = int(datetime.datetime.now().timestamp())
+        cache[f"{period}_dis_key"] = cache_key
 
     def _get_device_address(self, lat, lng):
         url = TUQIANG123_API_HOST + '/getAddress?lat='+str(lat)+'&lng='+str(lng)+'&mapType=baiduMap&poiList='
@@ -326,71 +388,10 @@ class DataFetcher:
                 except (ValueError, TypeError):
                     totalKm = self.totalkm.get(imei, 0)
 
-                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["today_dis_time"] ) >= 600:
-                    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
-                    start_time = f"{today_str} 00:00"
-                    end_time = f"{today_str} 23:59"
-                    data = None
-                    try:
-                        async with timeout(10):
-                            data =  await self.hass.async_add_executor_job(self._get_device_mileage, imei, start_time, end_time)
-                            self.dis[imei]["today_dis"]  = int(datetime.datetime.now().timestamp())
-                    except Exception:
-                        pass
-                    if data and len(data)>0:
-                        self.dis[imei]["today_dis"] = data[0].get("dis")
-                    else:
-                        self.dis[imei]["today_dis"] = 0
-
-                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["yesterday_dis_time"]) >= 3600:
-                    today = datetime.date.today()
-                    yesterday = today - datetime.timedelta(days=1)
-                    yesterday_str = yesterday.strftime('%Y-%m-%d')
-                    start_time = f"{yesterday_str} 00:00"
-                    end_time = f"{yesterday_str} 23:59"
-                    data = None
-                    try:
-                        async with timeout(10):
-                            data =  await self.hass.async_add_executor_job(self._get_device_mileage, imei, start_time, end_time)
-                            self.dis[imei]["yesterday_dis_time"] =  int(datetime.datetime.now().timestamp())
-                    except Exception:
-                        pass
-                    if data and len(data)>0:
-                        self.dis[imei]["yesterday_dis"]  =  data[0].get("dis")
-                    else:
-                        self.dis[imei]["yesterday_dis"]  = 0
-
-                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["month_dis_time"]) >= 3600:
-                    current_month = datetime.datetime.now().strftime("%Y-%m")
-                    start_time = f"{current_month}-01 00:00"
-                    end_time = f"{current_month}-{datetime.datetime.now().day} 23:59"
-                    data = None
-                    try:
-                        async with timeout(10):
-                            data =  await self.hass.async_add_executor_job(self._get_device_mileage, imei, start_time, end_time)
-                            self.dis[imei]["month_dis_time"]=  int(datetime.datetime.now().timestamp())
-                    except Exception:
-                        pass
-                    if data and len(data)>0:
-                        self.dis[imei]["month_dis"]= data[0].get("dis")
-                    else:
-                        self.dis[imei]["month_dis"] = 0
-
-                if int(datetime.datetime.now().timestamp()) - int(self.dis[imei]["year_dis_time"]) >= 3600:
-                    current_year = datetime.datetime.now().strftime("%Y")
-                    start_time = f"{current_year}-01-01 00:00"
-                    end_time = f"{current_year}-12-31 23:59"
-                    data = None
-                    try:
-                        async with timeout(10):
-                            data =  await self.hass.async_add_executor_job(self._get_device_mileage, imei, start_time, end_time)
-                            self.dis[imei]["year_dis_time"] =  int(datetime.datetime.now().timestamp())
-                    except Exception:
-                        pass
-                    if data and len(data)>0:
-                        self.dis[imei]["year_dis"] = data[0].get("dis")
-                    else:
-                        self.dis[imei]["year_dis"]  = 0
+                await self._update_mileage(imei, "today")
+                await self._update_mileage(imei, "yesterday")
+                await self._update_mileage(imei, "month")
+                await self._update_mileage(imei, "year")
 
 
                 attrs ={
@@ -408,10 +409,10 @@ class DataFetcher:
                     "address":address,
                     "powbatteryvoltage":voltage,
                     "totalKm":totalKm,
-                    "today_dis": self.dis[imei]["today_dis"] ,
-                    "yesterday_dis":self.dis[imei]["yesterday_dis"] ,
-                    "month_dis":self.dis[imei]["month_dis"] ,
-                    "year_dis":self.dis[imei]["year_dis"] ,
+                    "today_dis": self.dis[imei].get("today_dis", 0),
+                    "yesterday_dis": self.dis[imei].get("yesterday_dis", 0),
+                    "month_dis": self.dis[imei].get("month_dis", 0),
+                    "year_dis": self.dis[imei].get("year_dis", 0),
                     "positionType":positionType,
                     "statustime": statustime,
                     "defence_mode": defence_mode,
