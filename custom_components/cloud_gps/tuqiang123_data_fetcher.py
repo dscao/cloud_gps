@@ -3,6 +3,7 @@ get info
 """
 
 import logging
+import math
 import requests
 import re
 import asyncio
@@ -40,7 +41,7 @@ TUQIANG123_API_HOST = "https://www.tuqiang123.com"   # http://www.tuqiangol.com 
 class DataFetcher:
     """fetch the cloud gps data"""
 
-    def __init__(self, hass, username, password, device_imei, location_key):
+    def __init__(self, hass, username, password, device_imei, location_key, position_distance=0):
         self.hass = hass
         self.location_key = location_key
         self.username = username
@@ -56,6 +57,12 @@ class DataFetcher:
         self.address = {}
         self.totalkm = {}
         self.dis = {}
+        # 位置过滤：两次位置变化小于该距离(米)时不更新实体经纬度，0 表示不过滤
+        try:
+            self.position_distance = float(position_distance or 0)
+        except (TypeError, ValueError):
+            self.position_distance = 0
+        self._position_cache = {}
 
         headers = {
             'User-Agent': TUQIANG_USER_AGENT
@@ -200,6 +207,52 @@ class DataFetcher:
         cache[f"{period}_dis_time"] = int(datetime.datetime.now().timestamp())
         cache[f"{period}_dis_key"] = cache_key
 
+    @staticmethod
+    def _distance_meters(lat1, lon1, lat2, lon2):
+        """两点间球面距离（米）"""
+        rad_lat1 = math.radians(lat1)
+        rad_lat2 = math.radians(lat2)
+        delta_lat = rad_lat1 - rad_lat2
+        delta_lon = math.radians(lon1) - math.radians(lon2)
+        h = (math.sin(delta_lat / 2) ** 2
+             + math.cos(rad_lat1) * math.cos(rad_lat2) * math.sin(delta_lon / 2) ** 2)
+        return 2 * 6378137 * math.asin(min(1.0, math.sqrt(h)))
+
+    def _filter_position(self, imei, lat, lon, acc):
+        """位置过滤：变化距离小于阈值时不更新经纬度。
+
+        ACC 状态取自途强平台接口返回的 acc 字段。当 ACC 由开变关、且本次
+        位置正好被距离阈值挡住时，强制放行一次，之后继续按阈值过滤。
+        返回 (纬度, 经度, 是否被过滤)，被过滤时坐标沿用上一次已发布的值。
+        """
+        if self.position_distance <= 0:
+            return lat, lon, False
+
+        acc_off_now = str(acc) == "0"
+        cache = self._position_cache.get(imei)
+        if not cache:
+            self._position_cache[imei] = {"lat": lat, "lon": lon, "acc_off": acc_off_now}
+            return lat, lon, False
+
+        moved = self._distance_meters(cache["lat"], cache["lon"], lat, lon)
+        acc_just_off = acc_off_now and not cache.get("acc_off", acc_off_now)
+
+        if moved < self.position_distance and not acc_just_off:
+            _LOGGER.debug(
+                "途强在线 %s 位置变化 %.1f 米小于阈值 %s 米，保持上次位置",
+                imei, moved, self.position_distance,
+            )
+            cache["acc_off"] = acc_off_now
+            return cache["lat"], cache["lon"], True
+
+        if acc_just_off and moved < self.position_distance:
+            _LOGGER.debug(
+                "途强在线 %s ACC 已关闭，位置变化 %.1f 米小于阈值 %s 米，强制更新一次位置",
+                imei, moved, self.position_distance,
+            )
+        self._position_cache[imei] = {"lat": lat, "lon": lon, "acc_off": acc_off_now}
+        return lat, lon, False
+
     def _get_device_address(self, lat, lng):
         url = TUQIANG123_API_HOST + '/getAddress?lat='+str(lat)+'&lng='+str(lng)+'&mapType=baiduMap&poiList='
         resp = self.session_tuqiang123.get(url)
@@ -287,7 +340,7 @@ class DataFetcher:
                 onlinestatus = "在线"
                 status = "停车"
 
-                if data['acc'] == "1":
+                if str(data.get("acc")) == "1":
                     acc = "钥匙启动"
                     status = "钥匙启动"
                 else:
@@ -295,6 +348,7 @@ class DataFetcher:
 
                 thislat = float(data["lat"])
                 thislon = float(data["lng"])
+                thislat, thislon, position_filtered = self._filter_position(imei, thislat, thislon, data.get("acc"))
 
                 if data["status"] == "STATIC":
                     runorstop = "静止"
@@ -420,7 +474,7 @@ class DataFetcher:
                     "defence_params": defence_params 
                 }
 
-                self.trackerdata[imei] = {"location_key":self.location_key+imei,"deviceinfo":self.deviceinfo[imei],"thislat":thislat,"thislon":thislon,"imei":imei,"status":status,"attrs":attrs}
+                self.trackerdata[imei] = {"location_key":self.location_key+imei,"deviceinfo":self.deviceinfo[imei],"thislat":thislat,"thislon":thislon,"imei":imei,"status":status,"attrs":attrs,"position_filtered":position_filtered}
 
         return self.trackerdata
 

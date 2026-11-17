@@ -36,7 +36,8 @@
                     "with_map_card": "实体更多信息对话框显示地图,需已安装百度地图或墨澜地图集成",
                     "addressapi": "地址获取接口，使用 API 前请您先注册: [高德账号web服务key](https://lbs.amap.com/dev/key) , [百度账号服务端AK](https://lbsyun.baidu.com/apiconsole/key)  , [腾讯WebServiceAPI Key](https://lbs.qq.com/dev/console/application/mine) 。",
                     "api_key": "接口密钥，为空时不获取地址。",
-                    "private_key": "私钥值，数字签名时填写，否则留空。"
+                    "private_key": "私钥值，数字签名时填写，否则留空。",
+                    "position_distance": "位置过滤(米)：位置变化小于该值时不更新实体经纬度，0 关闭。ACC 关闭时强制更新一次"
                 },
                 "description": "更多设置，座标系：途强/中移行车卫士-WGS84，高德/优驾/哈啰/小牛-国测局。"
             }

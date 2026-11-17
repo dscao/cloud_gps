@@ -46,6 +46,7 @@ from .const import (
     KEY_RUNORSTOP,
     KEY_SHAKE,
     CONF_UPDATE_ADDRESSDISTANCE,
+    CONF_POSITION_DISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
@@ -1075,6 +1076,15 @@ class OptionsFlow(config_entries.OptionsFlow):
             SWITCHSLIST = []
             BUTTONSLIST = []
                 
+        option_schema = {}
+        if self.config_entry.data.get(CONF_WEB_HOST) == "tuqiang123.com":
+            option_schema[
+                vol.Optional(
+                    CONF_POSITION_DISTANCE,
+                    default=self.config_entry.options.get(CONF_POSITION_DISTANCE, 0),
+                )
+            ] = vol.All(vol.Coerce(int), vol.Range(min=0, max=10000))
+
         return self.async_show_form(
             step_id="user",            
             data_schema=vol.Schema(
@@ -1149,6 +1159,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                             multiple=True,translation_key=CONF_BUTTONS
                         )
                     ),
+                    **option_schema,
                     vol.Optional(
                         CONF_UPDATE_ADDRESSDISTANCE,
                         default=self.config_entry.options.get(CONF_UPDATE_ADDRESSDISTANCE, 50),
