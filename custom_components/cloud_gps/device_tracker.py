@@ -137,10 +137,18 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
         attrs.update(self._attrs)
         return attrs
         
+    def _position_filtered(self):
+        """位置被距离阈值过滤时为 True（仅途强在线会设置该标记）。"""
+        data = self.coordinator.data.get(self._imei) or {}
+        return bool(data.get("position_filtered")) and self._last_state["latitude"] is not None
+
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self.async_update()
+        if self._position_filtered():
+            _LOGGER.debug("%s 位置变化小于阈值，跳过状态写入", self._imei)
+            return
+        self.async_write_ha_state()
 
     async def async_added_to_hass(self):
         """Connect to dispatcher and restore state."""
@@ -161,7 +169,7 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
                 _LOGGER.debug("Restored state for %s: %s", self.entity_id, last_state)
         
         self.async_on_remove(
-            self.coordinator.async_add_listener(self.async_write_ha_state)
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
         
         # 如果协调器有数据，立即加载状态
@@ -173,6 +181,9 @@ class CloudGPSEntity(RestoreEntity, TrackerEntity):
         """Update cloud entity."""
         _LOGGER.debug("刷新device_tracker数据: %s %s %s", datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.coordinator.data.get(self._imei) )
         #await self.coordinator.async_request_refresh()
+        if self._position_filtered():
+            _LOGGER.debug("%s 位置变化小于阈值，跳过状态写入", self._imei)
+            return
         self._load_state()
         self.async_write_ha_state()
     

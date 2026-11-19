@@ -72,6 +72,7 @@ from .const import (
     UNDO_UPDATE_LISTENER,
     CONF_ATTR_SHOW,
     CONF_UPDATE_ADDRESSDISTANCE,
+    CONF_POSITION_DISTANCE,
     CONF_ADDRESSAPI,
     CONF_ADDRESSAPI_KEY,
     CONF_PRIVATE_KEY,
@@ -126,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     addressapi = entry.options.get(CONF_ADDRESSAPI, "none")
     api_key = entry.options.get(CONF_ADDRESSAPI_KEY, "")
     private_key = entry.options.get(CONF_PRIVATE_KEY, "")
+    position_distance = entry.options.get(CONF_POSITION_DISTANCE, 0)
     location_key = entry.unique_id
     
     # 异步导入模块
@@ -154,7 +156,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False # 或者抛出异常，阻止集成加载
 
     coordinator = CloudDataUpdateCoordinator(
-        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager
+        hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager, position_distance
     )
     
     await coordinator.async_refresh()
@@ -245,7 +247,7 @@ async def async_import_data_fetcher(hass, webhost):
 class CloudDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching cloud data API."""
 
-    def __init__(self, hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager=None):
+    def __init__(self, hass, data_fetcher_class, username, password, webhost, gps_conver, device_imei, location_key, update_interval_seconds, address_distance, addressapi, api_key, private_key, mqtt_manager=None, position_distance=0):
         """Initialize."""
         self._hass = hass
         update_interval = (
@@ -271,7 +273,10 @@ class CloudDataUpdateCoordinator(DataUpdateCoordinator):
         if mqtt_manager and webhost == "gps_mqtt":
             self._fetcher = data_fetcher_class(hass, mqtt_manager, device_imei, location_key)
         else:
-            self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key) 
+            if webhost == "tuqiang123.com":
+                self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key, position_distance)
+            else:
+                self._fetcher = data_fetcher_class(hass, username, password, device_imei, location_key) 
         
         self._entity_created = False
         self._retry_count = 0
