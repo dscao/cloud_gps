@@ -37,7 +37,7 @@
                     "addressapi": "Address acquisition interface. Please register first before using API: [Gaode account web service key](https://lbs.amap.com/dev/key) , [Baidu account server-side AK](https://lbsyun.baidu.com/apiconsole/key)  , [Tencent WebServiceAPI Key](https://lbs.qq.com/dev/console/application/mine).",
                     "api_key": "Interface key, leave blank if not acquiring address.",
                     "private_key": "Private key value, fill in when using digital signature, otherwise leave blank.",
-                    "position_distance": "Position filter (m): skip position updates smaller than this, 0 disables. Forces one update when ACC turns off"
+                    "position_distance": "Position filter (m): skip position updates smaller than this, 0 disables. ACC changes are also subject to this distance"
                 },
                 "description": "More settings, coordinate system: Tucheng/Zhongxing Weishi-WGS84, Gaode/Youjia/Hello/Xiaoniu-National Measurement Bureau."
             }

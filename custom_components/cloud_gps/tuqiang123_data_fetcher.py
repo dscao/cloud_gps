@@ -221,8 +221,8 @@ class DataFetcher:
     def _filter_position(self, imei, lat, lon, acc):
         """位置过滤：变化距离小于阈值时不更新经纬度。
 
-        ACC 状态取自途强平台接口返回的 acc 字段。当 ACC 由开变关、且本次
-        位置正好被距离阈值挡住时，强制放行一次，之后继续按阈值过滤。
+        ACC 状态取自途强平台接口返回的 acc 字段，仅用于日志说明。
+        ACC 发生变化时同样受距离阈值约束，不会因为 ACC 变化而强制更新位置。
         返回 (纬度, 经度, 是否被过滤)，被过滤时坐标沿用上一次已发布的值。
         """
         if self.position_distance <= 0:
@@ -235,21 +235,16 @@ class DataFetcher:
             return lat, lon, False
 
         moved = self._distance_meters(cache["lat"], cache["lon"], lat, lon)
-        acc_just_off = acc_off_now and not cache.get("acc_off", acc_off_now)
-
-        if moved < self.position_distance and not acc_just_off:
+        if moved < self.position_distance:
+            acc_changed = acc_off_now != cache.get("acc_off", acc_off_now)
             _LOGGER.debug(
-                "途强在线 %s 位置变化 %.1f 米小于阈值 %s 米，保持上次位置",
+                "途强在线 %s 位置变化 %.1f 米小于阈值 %s 米%s，保持上次位置",
                 imei, moved, self.position_distance,
+                "（ACC 已变化，同样不更新）" if acc_changed else "",
             )
             cache["acc_off"] = acc_off_now
             return cache["lat"], cache["lon"], True
 
-        if acc_just_off and moved < self.position_distance:
-            _LOGGER.debug(
-                "途强在线 %s ACC 已关闭，位置变化 %.1f 米小于阈值 %s 米，强制更新一次位置",
-                imei, moved, self.position_distance,
-            )
         self._position_cache[imei] = {"lat": lat, "lon": lon, "acc_off": acc_off_now}
         return lat, lon, False
 
